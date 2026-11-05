@@ -41,7 +41,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         "Complete(uint256 jobId,address user,bytes32 fileHash,bytes32 resultHash,bytes32 attestationHash)"
     );
 
-    uint32 public constant MIN_EXPIRY = 5 minutes;
+    uint32 public constant MIN_EXPIRY = 1 minutes; // the 2-minute demo timer and the backend's 60s floor must fit
     uint32 public constant MAX_EXPIRY = 30 days;
 
     IERC20 public immutable usdt;
@@ -125,7 +125,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Lock one query price from the caller's balance and open a job.
     /// @param fileHash content hash of the encrypted file stored on 0G Storage
-    /// @param expirySeconds lifetime of the result in Arkiv (5 minutes to 30 days)
+    /// @param expirySeconds lifetime of the result in Arkiv (1 minute to 30 days)
     function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256 jobId) {
         if (expirySeconds < MIN_EXPIRY || expirySeconds > MAX_EXPIRY) revert InvalidExpiry();
         uint256 price = queryPrice;

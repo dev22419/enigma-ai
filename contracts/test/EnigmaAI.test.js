@@ -133,9 +133,10 @@ describe("EnigmaAI", () => {
     it("enforces the expiry bounds", async () => {
       const { enigma, company } = await loadFixture(deploy);
       await enigma.connect(company).deposit(2_000_000n);
-      await expect(enigma.connect(company).createJob(FILE_HASH, 299)).to.be.revertedWithCustomError(enigma, "InvalidExpiry");
+      await expect(enigma.connect(company).createJob(FILE_HASH, 59)).to.be.revertedWithCustomError(enigma, "InvalidExpiry");
       await expect(enigma.connect(company).createJob(FILE_HASH, 30 * 86400 + 1)).to.be.revertedWithCustomError(enigma, "InvalidExpiry");
-      await enigma.connect(company).createJob(FILE_HASH, 300);
+      await enigma.connect(company).createJob(FILE_HASH, 60);
+      await enigma.connect(company).createJob(FILE_HASH, 120); // the demo's 2-minute timer
       await enigma.connect(company).createJob(FILE_HASH, 30 * 86400);
     });
   });
