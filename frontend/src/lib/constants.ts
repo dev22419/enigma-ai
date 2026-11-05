@@ -4,7 +4,8 @@ export const ZG_MODEL = "0gm-1.0-35b-a3b";
 export const WHITECHAIN_RPC = process.env.WHITECHAIN_RPC || "https://rpc.ankr.com/whitechain_testnet";
 export const WHITECHAIN_CHAIN_ID = 1874;
 
-export const ARKIV_RPC = process.env.ARKIV_RPC || "https://kaolin.hoodi.arkiv.network/rpc";
+export const ARKIV_RPC = process.env.ARKIV_RPC || "https://rpc.rabdi.db-chain.testnet.arkiv.network";
+export const ARKIV_CHAIN_ID = 7794095;
 
 export const TASK_TYPES = ["medical", "legal", "financial"] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
