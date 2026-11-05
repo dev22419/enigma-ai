@@ -9,8 +9,8 @@ const ENIGMA_ABI = [
   "function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256)",
   "function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes signature) external",
   "function deposit(uint256 amount) external",
-  "event JobCreated(uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment)",
-  "event JobCompleted(uint256 indexed jobId, bytes32 resultHash, bytes32 attestationHash)",
+  "event JobCreated(uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment, uint32 expirySeconds)",
+  "event JobCompleted(uint256 indexed jobId, address indexed user, bytes32 resultHash, bytes32 attestationHash, address signer, uint64 expiresAt)",
 ];
 
 const JOB_STATUS = ["None", "Pending", "Completed", "Refunded"] as const;
