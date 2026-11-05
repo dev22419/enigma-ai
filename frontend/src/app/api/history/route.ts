@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       address,
       totalJobs: jobs.length,
-      jobs: jobs.map((job, i) => ({
-        jobId: i + 1,
+      jobs: jobs.map((job) => ({
+        jobId: job.jobId,
         status: job.status,
         createdAt: job.createdAt,
         completedAt: job.completedAt,
