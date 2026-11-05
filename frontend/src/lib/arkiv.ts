@@ -1,27 +1,44 @@
-import { ethers } from "ethers";
-import { ARKIV_RPC } from "./constants";
+import {
+  createPublicClient,
+  createWalletClient,
+  ExpirationTime,
+} from "@arkiv-network/sdk";
+import { rabdi } from "@arkiv-network/sdk/chains";
+import { bytes, str, defineSchema } from "@arkiv-network/sdk/schema";
+import { http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import type { Hex } from "viem";
 
-const ARKIV_ENTITY_ABI = [
-  "function createEntity(bytes32 entityId, bytes data, uint256 ttl) external",
-  "function getEntity(bytes32 entityId) external view returns (bytes data, uint256 expiresAt, bool exists)",
-  "function deleteEntity(bytes32 entityId) external",
-];
+const schema = defineSchema("enigma-ai.results", {
+  jobId: str().indexed(),
+  data: bytes(),
+});
 
-const ARKIV_CONTRACT = process.env.ARKIV_CONTRACT_ADDRESS || "";
-
-function getArkivProvider() {
-  return new ethers.JsonRpcProvider(ARKIV_RPC);
+function getChain() {
+  const accessKey = process.env.ARKIV_ACCESS_KEY ?? "";
+  return rabdi({ accessKey });
 }
 
-function getArkivSigner() {
+function getPublicClient() {
+  return createPublicClient({ chain: getChain(), transport: http() });
+}
+
+function getWalletClient() {
   const key = process.env.ORACLE_PRIVATE_KEY;
   if (!key) throw new Error("ORACLE_PRIVATE_KEY not configured");
-  return new ethers.Wallet(key, getArkivProvider());
+  const account = privateKeyToAccount(key as Hex);
+  return createWalletClient({
+    chain: getChain(),
+    transport: http(),
+    account,
+  });
 }
 
-function getArkivContract(signerOrProvider: ethers.Signer | ethers.Provider) {
-  if (!ARKIV_CONTRACT) throw new Error("ARKIV_CONTRACT_ADDRESS not configured");
-  return new ethers.Contract(ARKIV_CONTRACT, ARKIV_ENTITY_ABI, signerOrProvider);
+function ttlToExpiration(ttlSeconds: number) {
+  const days = Math.ceil(ttlSeconds / 86400);
+  if (days >= 1) return ExpirationTime.fromDays(days);
+  const minutes = Math.ceil(ttlSeconds / 60);
+  return ExpirationTime.fromMinutes(minutes);
 }
 
 export async function storeInArkiv(
@@ -29,29 +46,47 @@ export async function storeInArkiv(
   data: string,
   ttlSeconds: number
 ): Promise<string> {
-  const signer = getArkivSigner();
-  const contract = getArkivContract(signer);
-  const entityId = ethers.keccak256(ethers.toUtf8Bytes(jobId));
-  const encodedData = ethers.toUtf8Bytes(data);
+  const client = getWalletClient();
+  const encoded = new TextEncoder().encode(data);
 
-  const tx = await contract.createEntity(entityId, encodedData, ttlSeconds);
-  await tx.wait();
+  const { entityKey, expiresAt } = await client.createEntity(
+    schema,
+    {
+      jobId,
+      data: encoded,
+    },
+    { expiration: ttlToExpiration(ttlSeconds) }
+  );
 
-  return entityId;
+  return entityKey;
 }
 
 export async function fetchFromArkiv(
   jobId: string
 ): Promise<{ data: string; expiresAt: number; exists: boolean }> {
-  const provider = getArkivProvider();
-  const contract = getArkivContract(provider);
-  const entityId = ethers.keccak256(ethers.toUtf8Bytes(jobId));
+  const client = getPublicClient();
+  const account = getWalletClient().account;
 
-  const [rawData, expiresAt, exists] = await contract.getEntity(entityId);
+  const { entities } = await client
+    .select({ jobId: true, data: true, $expiresAt: true })
+    .from(schema)
+    .ownedBy(account.address)
+    .fetch();
+
+  const match = entities.find((e) => e.jobId.value === jobId);
+
+  if (!match) {
+    return { data: "", expiresAt: 0, exists: false };
+  }
+
+  const hex = match.data.value.startsWith("0x")
+    ? match.data.value.slice(2)
+    : match.data.value;
+  const decoded = Buffer.from(hex, "hex").toString("utf-8");
 
   return {
-    data: exists ? ethers.toUtf8String(rawData) : "",
-    expiresAt: Number(expiresAt),
-    exists,
+    data: decoded,
+    expiresAt: Number(match.$expiresAt),
+    exists: true,
   };
 }
