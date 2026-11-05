@@ -9,6 +9,8 @@ const ENIGMA_ABI = [
   "function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256)",
   "function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes signature) external",
   "function deposit(uint256 amount) external",
+  "event JobCreated(uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment)",
+  "event JobCompleted(uint256 indexed jobId, bytes32 resultHash, bytes32 attestationHash)",
 ];
 
 const JOB_STATUS = ["None", "Pending", "Completed", "Refunded"] as const;
@@ -77,16 +79,19 @@ export async function getNextJobId(): Promise<number> {
 
 export async function getJobHistory(
   userAddress: string
-): Promise<OnChainJob[]> {
-  const nextId = await getNextJobId();
-  const jobs: OnChainJob[] = [];
+): Promise<(OnChainJob & { jobId: number })[]> {
+  const contract = getContract();
+  const filter = contract.filters.JobCreated(null, userAddress);
+  const events = await contract.queryFilter(filter);
 
-  for (let i = 1; i < nextId; i++) {
-    const job = await getJobOnChain(i);
-    if (job.user.toLowerCase() === userAddress.toLowerCase()) {
-      jobs.push(job);
-    }
-  }
+  const jobs = await Promise.all(
+    events.map(async (event) => {
+      const log = event as ethers.EventLog;
+      const jobId = Number(log.args[0]);
+      const job = await getJobOnChain(jobId);
+      return { ...job, jobId };
+    })
+  );
 
   return jobs;
 }

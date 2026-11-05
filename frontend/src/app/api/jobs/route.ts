@@ -40,13 +40,14 @@ export async function POST(req: NextRequest) {
 
     const resultHash = hashContent(content);
 
-    let attestationHash = "";
-    try {
-      const attestation = await getTeeAttestation(chatId);
-      attestationHash = hashContent(attestation);
-    } catch {
-      attestationHash = hashContent(`tee-pending-${chatId}`);
+    const attestation = await getTeeAttestation(chatId);
+    if (!attestation) {
+      return NextResponse.json(
+        { error: "TEE attestation unavailable — cannot verify inference integrity" },
+        { status: 502 }
+      );
     }
+    const attestationHash = hashContent(attestation);
 
     // TODO: call contract.createJob on-chain once contract is deployed
     // TODO: store in Arkiv with TTL
