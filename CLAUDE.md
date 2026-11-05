@@ -76,7 +76,7 @@ Before changing any of these, call `publish_contract` on TeamBus:
 |---|---|---|
 | 0G Testnet | 16602 | https://evmrpc-testnet.0g.ai |
 | Whitechain Testnet | 1874 | https://rpc.ankr.com/whitechain_testnet |
-| Arkiv Kaolin | 60138453025 | https://kaolin.hoodi.arkiv.network/rpc |
+| Arkiv Rabdi | 7794095 | https://rpc.rabdi.db-chain.testnet.arkiv.network |
 
 ## ETHGlobal Rules
 
