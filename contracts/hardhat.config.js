@@ -13,7 +13,7 @@ module.exports = {
   },
   networks: {
     whitechain: {
-      url: "https://rpc.ankr.com/whitechain_testnet",
+      url: process.env.WHITECHAIN_RPC_URL || "https://rpc.ankr.com/whitechain_testnet",
       chainId: 1874,
       accounts: process.env.DEPLOYER_PRIVATE_KEY
         ? [process.env.DEPLOYER_PRIVATE_KEY]
