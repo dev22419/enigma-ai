@@ -502,6 +502,13 @@ function Composer({
 
 /* ================================================================== messages */
 
+/** Upstream errors carry raw provider JSON. Say what happened instead. */
+export function plainError(message: string) {
+  if (/0G inference failed|no provider|upstream/i.test(message)) return "0G's sealed model didn't respond. Try again in a minute.";
+  if (/attestation|no request id|empty result/i.test(message)) return "0G's answer couldn't be verified, so it wasn't used.";
+  return message.split(/[{[]/)[0].trim() || "The server couldn't finish this message.";
+}
+
 function Thumb({ src, className }: { src: string; className?: string }) {
   // A data URL held in this tab, so next/image has nothing to optimise
   // eslint-disable-next-line @next/next/no-img-element
@@ -699,7 +706,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
         ) : (
           <div role="alert" className="border-l border-orchid/60 pl-5">
             <p className="text-[15px] text-frost">{p.error.notConfigured ? "The server isn't set up to run jobs yet." : "This message didn't go through."}</p>
-            <p className="mt-1.5 font-mono text-[12px] leading-relaxed break-words text-frost/45">{p.error.message}</p>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed break-words text-frost/60">{plainError(p.error.message)}</p>
             {refund && <p className="mt-2 text-[13.5px] text-frost/70">Job {String(p.error.body.jobId)} was opened but couldn&rsquo;t finish, so this browser wiped its key. The payment comes back after the contract&rsquo;s timeout.</p>}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {p.error.notConfigured && (
