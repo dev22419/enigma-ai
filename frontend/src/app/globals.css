@@ -206,19 +206,6 @@ body {
   animation: stamp-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 
-/* ---------------------------------------------------------------- landing seams */
-@keyframes seam-spark {
-  from {
-    top: -2.5rem;
-  }
-  to {
-    top: 100%;
-  }
-}
-.seam-spark {
-  animation: seam-spark 2.6s cubic-bezier(0.55, 0, 0.45, 1) infinite;
-}
-
 /* ---------------------------------------------------------------- chat */
 
 /* A border lit from inside: electric blue into cantaloupe */
@@ -307,6 +294,59 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Landing rhythm, taken from the hero: black, centred, one idea at a time */
+.shell {
+  margin-inline: auto;
+  max-width: 1200px;
+  padding-inline: clamp(20px, 4vw, 32px);
+}
+.section {
+  padding-block: clamp(96px, 12vw, 168px);
+}
+.heading {
+  font-size: clamp(2.4rem, 5vw, 4.25rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+.lede {
+  margin-top: 20px;
+  margin-inline: auto;
+  max-width: 36rem;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--frost-soft);
+  text-wrap: balance;
+}
+/* A point of light travelling along the route line */
+@keyframes route-pulse {
+  from {
+    transform: translateX(-120px);
+  }
+  to {
+    transform: translateX(1100px);
+  }
+}
+.route-pulse {
+  display: none;
+}
+@media (min-width: 768px) {
+  .route-pulse {
+    display: block;
+    width: 120px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--volt-lit), transparent);
+    animation: route-pulse 5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-pulse {
+    animation: none;
+    display: none;
   }
 }
 
