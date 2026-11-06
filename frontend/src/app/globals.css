@@ -322,32 +322,22 @@ body {
   color: var(--frost-soft);
   text-wrap: balance;
 }
-/* A point of light travelling along the route line */
-@keyframes route-pulse {
-  from {
-    transform: translateX(-120px);
-  }
-  to {
-    transform: translateX(1100px);
-  }
+/* The hero's ribbed glass, as a CSS overlay for small surfaces */
+.flute {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgb(2 7 10 / 0.6) 0 1px,
+    rgb(255 255 255 / 0.2) 1px 2px,
+    rgb(255 255 255 / 0.03) 2px 14px,
+    rgb(2 7 10 / 0.32) 24px 26px
+  );
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
 }
-.route-pulse {
-  display: none;
-}
-@media (min-width: 768px) {
-  .route-pulse {
-    display: block;
-    width: 120px;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, var(--volt-lit), transparent);
-    animation: route-pulse 5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .route-pulse {
-    animation: none;
-    display: none;
-  }
+/* Torn edge along the bottom of the receipt */
+.ticket {
+  -webkit-mask: radial-gradient(6px at 50% 100%, transparent 98%, #000) 0 100% / 18px 100% repeat-x;
+  mask: radial-gradient(6px at 50% 100%, transparent 98%, #000) 0 100% / 18px 100% repeat-x;
 }
 
 /* ---------------------------------------------------------------- glass nav */

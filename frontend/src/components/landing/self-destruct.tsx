@@ -6,6 +6,7 @@ import { useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { FlutedGlass } from "./fluted-glass";
 import { Reveal } from "./reveal";
 
 /** The range the API accepts: ttl between 60 seconds and 30 days. */
@@ -22,6 +23,14 @@ const RESULT = [
   ["Unusual clause", "Clause 14.2 caps liability at one month of fees."],
   ["Renewal", "Renews automatically each year unless cancelled 60 days before."],
 ];
+
+/** Eats a string as time runs out. Stable per character, so it decays instead of flickering. */
+function decay(text: string, amount: number) {
+  const glyphs = "0123456789abcdef";
+  return [...text]
+    .map((c, i) => (c !== " " && ((i * 37 + text.length * 11) % 100) / 100 < amount ? glyphs[(i * 7) % 16] : c))
+    .join("");
+}
 
 function clock(sec: number) {
   const s = Math.max(0, Math.ceil(sec));
@@ -70,65 +79,63 @@ export function SelfDestruct() {
 
   return (
     <section id="lifespan" className="section text-frost">
-      <Reveal className="shell text-center">
-        <h2 className="heading">You choose when the answer dies</h2>
-        <p className="lede">One minute to 30 days. When it ends, Arkiv drops the answer and your browser wipes the key.</p>
-
-        <p className="mt-16 font-mono text-[12px] text-frost-soft md:mt-24">{gone ? "key destroyed" : "key destroyed in"}</p>
-        <p
-          className={cn(
-            "num mt-3 font-mono text-[clamp(3.25rem,12vw,9rem)] leading-none tracking-[-0.04em] transition-colors",
-            gone ? "text-frost/25" : late ? "text-melon" : "text-frost",
-          )}
-        >
-          {clock(frac * ttl)}
-        </p>
-
-        <div className="relative mx-auto mt-10 h-px max-w-[640px] bg-frost/15">
-          <div
-            className={cn("absolute inset-y-0 left-0 w-full origin-left transition-colors", late ? "bg-melon" : "bg-frost")}
-            style={{ transform: `scaleX(${frac})` }}
-          />
+      <Reveal className="shell">
+        <div className="text-center">
+          <h2 className="heading">You choose when the answer dies</h2>
+          <p className="lede">One minute to 30 days. When it ends, Arkiv drops the answer and your browser wipes the key.</p>
         </div>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-2" role="radiogroup" aria-label="Lifespan">
-          {OPTIONS.map((o, i) => (
-            <button
-              key={o.ttl}
-              role="radio"
-              aria-checked={choice === i}
-              onClick={() => pick(i)}
-              className={cn(
-                "py-2 text-[15px] transition-colors",
-                choice === i ? "font-semibold text-frost" : "text-frost-soft hover:text-frost",
-              )}
-            >
-              {o.label}
-            </button>
-          ))}
+        {/* The light behind the glass dies with the timer */}
+        <div className="relative isolate mt-16 overflow-hidden rounded-[16px] bg-night px-5 py-14 text-center shadow-[0_0_0_1px_rgb(234_243_249/0.1)] sm:px-10 md:mt-20 md:py-20">
+          <FlutedGlass className="-z-20" rib={58} focus={0} />
+          <div className="absolute inset-0 -z-10 bg-night" style={{ opacity: 0.5 + 0.5 * (1 - frac) }} aria-hidden="true" />
+
+          <p className={cn("font-mono text-[12px]", gone ? "text-melon-lit" : "text-frost/75")}>
+            {gone ? "key destroyed" : "key destroyed in"}
+          </p>
+          <p
+            className={cn(
+              "num mt-3 font-mono text-[clamp(3.25rem,12vw,9rem)] leading-none tracking-[-0.04em] transition-colors",
+              gone ? "text-frost/25" : late ? "text-melon-lit" : "text-frost",
+            )}
+          >
+            {clock(frac * ttl)}
+          </p>
+
+          <dl className="mx-auto mt-12 max-w-[640px] text-left">
+            {RESULT.map(([k, v]) => (
+              <div key={k} className="grid gap-1 border-t border-frost/15 py-3.5 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-5">
+                <dt className="text-[14px] text-frost/70">{k}</dt>
+                <dd className={cn("font-mono text-[13px] leading-snug transition-opacity duration-500", gone && "opacity-30")}>
+                  {decay(v, 1 - frac)}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
-        <Button onClick={run} disabled={running} variant={gone ? "outline-frost" : "primary"} className="mt-8">
-          {gone ? "Run it again" : running ? "Running…" : "Run the timer"}
-        </Button>
-
-        <dl className="mx-auto mt-16 max-w-[640px] text-left">
-          {RESULT.map(([k, v], i) => (
-            <div key={k} className="grid gap-1 border-t border-frost/10 py-4 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-5">
-              <dt className="text-[14px] text-frost-soft">{k}</dt>
-              <dd className="relative text-[15px] leading-snug">
-                <span className={cn("transition-opacity duration-300", gone && "opacity-0")} style={{ transitionDelay: `${i * 90}ms` }}>
-                  {v}
-                </span>
-                <span
-                  className={cn("absolute inset-y-0.5 left-0 origin-left rounded-sm bg-frost/10 transition-transform duration-300", gone ? "scale-x-100" : "scale-x-0")}
-                  style={{ right: `${10 + i * 12}%`, transitionDelay: `${i * 90}ms` }}
-                />
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-2 font-mono text-[11.5px] text-frost-soft">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+          <div className="flex gap-6" role="radiogroup" aria-label="Lifespan">
+            {OPTIONS.map((o, i) => (
+              <button
+                key={o.ttl}
+                role="radio"
+                aria-checked={choice === i}
+                onClick={() => pick(i)}
+                className={cn(
+                  "py-2 text-[15px] transition-colors",
+                  choice === i ? "font-semibold text-frost" : "text-frost-soft hover:text-frost",
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <Button onClick={run} disabled={running} variant={gone ? "outline-frost" : "primary"}>
+            {gone ? "Run it again" : running ? "Running…" : "Run the timer"}
+          </Button>
+        </div>
+        <p className="mt-4 text-center font-mono text-[11.5px] text-frost-soft">
           Sample answer. {OPTIONS[choice].long}, sped up {Math.round(ttl / SIM).toLocaleString("en-US")} times.
         </p>
       </Reveal>
