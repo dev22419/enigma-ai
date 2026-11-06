@@ -5,7 +5,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useAccount, useBalance, useReadContract, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useAccount, useBalance, useDisconnect, useReadContract, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 
 import { cn } from "@/lib/utils";
 import { CHAIN_ID, ENIGMA_ADDRESS, SERVICE_PAID, USDT_ADDRESS, USDT_DECIMALS, enigmaAbi, usdtAbi } from "@/lib/client/chain";
@@ -98,6 +98,7 @@ export function WalletBox() {
   const mounted = useMounted();
   const { address, isConnected, chainId } = useAccount();
   const credit = useCredit(isConnected ? address : undefined);
+  const { disconnect } = useDisconnect();
 
   if (SERVICE_PAID)
     return (
@@ -123,11 +124,28 @@ export function WalletBox() {
   return (
     <div className="px-2 pt-2 max-lg:hidden">
       <ConnectButton.Custom>
-        {({ openAccountModal }) => (
-          <button onClick={openAccountModal} className="flex w-full items-center gap-2 text-left text-[13px] text-frost/85 transition-colors hover:text-frost">
-            <span className={cn("size-1.5 rounded-full", chainId === CHAIN_ID ? "bg-volt-lit shadow-[0_0_8px_#5cc4ff]" : "bg-melon")} />
-            <span className="font-mono text-[12px]">{short(address, 6, 4)}</span>
-          </button>
+        {({ openAccountModal, openConnectModal }) => (
+          <>
+            <button onClick={openAccountModal} className="flex w-full items-center gap-2 text-left text-[13px] text-frost/85 transition-colors hover:text-frost">
+              <span className={cn("size-1.5 rounded-full", chainId === CHAIN_ID ? "bg-volt-lit shadow-[0_0_8px_#5cc4ff]" : "bg-melon")} />
+              <span className="font-mono text-[12px]">{short(address, 6, 4)}</span>
+            </button>
+            <p className="mt-1 flex gap-3 text-[12px] text-frost-soft/70">
+              <button
+                onClick={() => {
+                  // Drop the current session first, then reopen the picker so another wallet or account can be chosen.
+                  disconnect();
+                  openConnectModal();
+                }}
+                className="underline decoration-frost/20 underline-offset-4 hover:text-frost"
+              >
+                Switch
+              </button>
+              <button onClick={() => disconnect()} className="underline decoration-frost/20 underline-offset-4 hover:text-frost">
+                Disconnect
+              </button>
+            </p>
+          </>
         )}
       </ConnectButton.Custom>
       {chainId !== CHAIN_ID && <p className="mt-1 text-[12px] text-melon">Switch to Whitechain to add credit.</p>}
