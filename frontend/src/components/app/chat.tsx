@@ -11,7 +11,7 @@ import { useSignMessage } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
 import { cn } from "@/lib/utils";
-import { EnclaveOrb, OrbMark } from "./orb";
+import { DotOrb, EnclaveOrb, OrbMark } from "./orb";
 import { ConnectPill, useGate, type Gate } from "./wallet";
 import {
   ApiError,
@@ -223,7 +223,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
       {empty ? (
         <div className="flex flex-1 flex-col items-center justify-center px-5 pb-24 sm:px-8">
           <div className="rise w-full max-w-[640px]">
-            <EnclaveOrb className="size-14 [&>div:first-child]:-inset-3 [&>div:first-child]:blur-xl" />
+            <EnclaveOrb />
             <h1 className="mt-8 text-[28px] leading-tight font-semibold tracking-[-0.02em]">Private by default.</h1>
             <p className="mt-2 text-[15px] leading-relaxed text-frost/55">
               Add a document. It&rsquo;s read inside a sealed enclave, and the answer becomes unreadable when its timer ends.
@@ -511,7 +511,7 @@ function Reply({ id }: { id: string }) {
   if (loading || !vm)
     return (
       <div className="flex items-center gap-3">
-        <OrbMark className="size-5" />
+        <OrbMark />
         <p className="text-[13.5px] text-frost-soft">{error ? `Couldn't load job ${id}: ${error.message}` : "Loading…"}</p>
       </div>
     );
@@ -524,7 +524,7 @@ function Reply({ id }: { id: string }) {
   return (
     <div className="rise">
       <div className="mb-3 flex items-center gap-2.5">
-        <OrbMark className={cn("size-5", vm.phase === "working" && "animate-pulse")} />
+        <OrbMark />
         <span className="text-[13px] font-medium text-frost/80">Enigma</span>
       </div>
 
@@ -625,13 +625,14 @@ function Working({ started, stage }: { started: number; stage?: Stage }) {
   const secs = Math.max(0, Math.floor((now - started) / 1000));
   const at = stage ? STAGES.indexOf(stage) : -1;
   return (
-    <div className="pl-5">
-      <p className="text-[15px]">
-        <span className="shimmer">{stage ? STAGE_LABEL[stage] : "Waiting for the job to complete"}</span>
-        <span className="num ml-2 text-[12px] text-frost-soft/50">{secs}s</span>
+    <div>
+      <p className="inline-flex max-w-full items-center gap-3 rounded-full bg-frost/[0.04] py-2 pr-5 pl-2.5 text-[15px] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.05)]">
+        <DotOrb size={38} />
+        <span className="shimmer min-w-0">{stage ? STAGE_LABEL[stage] : "Waiting for the job to complete"}</span>
+        <span className="num shrink-0 text-[12px] text-frost-soft/60">{secs}s</span>
       </p>
       {stage && (
-        <div className="mt-2.5 flex gap-1" aria-hidden="true">
+        <div className="mt-3 flex gap-1 pl-3" aria-hidden="true">
           {STAGES.map((st, i) => (
             <span key={st} className={cn("h-0.5 w-5 rounded-full transition-colors duration-500", i < at ? "bg-volt-lit/80" : i === at ? "animate-pulse bg-frost/70" : "bg-frost/10")} />
           ))}
@@ -648,7 +649,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
       <UserMessage label={p.out.label} out={p.out} ttl={p.out.ttl} task={p.out.task} />
       <div className="rise">
         <div className="mb-3 flex items-center gap-2.5">
-          <OrbMark className={cn("size-5", !p.error && "animate-pulse")} />
+          <OrbMark />
           <span className="text-[13px] font-medium text-frost/80">Enigma</span>
         </div>
         {!p.error ? (
