@@ -13,8 +13,11 @@ import {
   loadWipeReceipt,
   newJobKey,
   parseEnvelope,
+  setKeyExpiry,
   storeKey,
   storeToken,
+  wipeAllKeys,
+  wipeExpiredKeys,
   wipeKey,
 } from "@/lib/client/vault";
 
@@ -145,7 +148,9 @@ export function patchEntry(id: string, patch: Partial<IndexEntry>) {
   saveIndex(all.map((e) => (e.id === id ? { ...e, ...patch } : e)));
 }
 
+/** Clears the job list. Keys go first, so nothing readable outlives the list that points to it. */
 export function forgetAll() {
+  wipeAllKeys();
   saveIndex([]);
 }
 
@@ -230,6 +235,7 @@ function post<T>(url: string, body: unknown, token?: string) {
 export async function runJob(
   input: { taskType: Task; ttl: number; fileName: string; content: string },
   onStage: (s: Stage) => void,
+  onCreated?: (jobId: string) => void,
 ): Promise<{ jobId: string; expiresAt: number; result: string }> {
   onStage("encrypt");
   const fileHash = hashText(input.content);
@@ -245,8 +251,11 @@ export async function runJob(
     encryptedFile,
   });
   const jobId = created.jobId;
-  await storeKey(jobId, key, keyId);
+  // Provisional deadline: the requested lifespan from now, plus a small margin for the remaining steps.
+  await storeKey(jobId, key, keyId, Math.floor(Date.now() / 1000) + input.ttl + 120);
   storeToken(jobId, created.accessToken);
+  // Record the job right away, so it can always be found (and its key wiped) even if the tab closes mid-run.
+  onCreated?.(jobId);
 
   try {
     onStage("infer");
@@ -261,6 +270,7 @@ export async function runJob(
       { encryptedResult, resultHash: inf.resultHash, attestationHash: inf.attestationHash, chatId: inf.chatId },
       created.accessToken,
     );
+    setKeyExpiry(jobId, stored.expiresAt);
     fresh.set(jobId, inf.result);
     return { jobId, expiresAt: stored.expiresAt * 1000, result: inf.result };
   } catch (e) {
@@ -604,9 +614,13 @@ export async function tryDecrypt(id: string): Promise<{ ok: true } | { ok: false
   }
 }
 
-/** Wipes the keys of every job in this browser whose lifespan has ended (task #74). */
+/**
+ * Wipes every expired key in this browser session (task #74). It reads the keys' own deadlines
+ * from storage, so a key is wiped even if its job is missing from the list. Arkiv's expiry, when
+ * known on the list, also counts.
+ */
 export function wipeExpired(all: IndexEntry[], now: number) {
-  let wiped = 0;
+  let wiped = wipeExpiredKeys(Math.floor(now / 1000));
   for (const e of all) {
     if (e.preview || !e.expiresAt || now < e.expiresAt) continue;
     if (hasKey(e.id) && wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;

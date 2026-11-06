@@ -45,7 +45,7 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
 type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number };
 type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
-type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null };
+type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null; jobId?: string };
 type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
 
 /** Wall-clock time for event handlers (kept out of render). */
@@ -89,9 +89,14 @@ export function Chat({ samples }: { samples: Sample[] }) {
   }, [threadId, router]);
 
   const pending = allPending.filter((p) => p.thread === threadId);
+  // A job that's still running shows as its pending turn, not twice.
+  const runningIds = allPending.map((p) => p.jobId).filter(Boolean).join(",");
   const jobs = useMemo(
-    () => (index ?? []).filter((e) => threadId && (e.thread ?? `job-${e.id}`) === threadId).sort((a, b) => a.createdAt - b.createdAt),
-    [index, threadId],
+    () =>
+      (index ?? [])
+        .filter((e) => threadId && (e.thread ?? `job-${e.id}`) === threadId && !runningIds.split(",").includes(e.id))
+        .sort((a, b) => a.createdAt - b.createdAt),
+    [index, threadId, runningIds],
   );
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
@@ -131,8 +136,13 @@ export function Chat({ samples }: { samples: Sample[] }) {
       return;
     }
     try {
-      const res = await runJob({ taskType: out.task, ttl: out.ttl, fileName: out.fileName, content: out.content }, (stage) =>
-        setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
+      const res = await runJob(
+        { taskType: out.task, ttl: out.ttl, fileName: out.fileName, content: out.content },
+        (stage) => setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
+        (jobId) => {
+          setPending((p) => p.map((x) => (x.key === key ? { ...x, jobId } : x)));
+          remember({ id: jobId, fileName: out.label, task: out.task, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t });
+        },
       );
       remember({
         id: res.jobId,
