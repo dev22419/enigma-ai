@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 // Minimal Web Storage for the node test environment (the vault uses sessionStorage + localStorage).
 class MemStorage {
   private m = new Map<string, string>();
+  get length() {
+    return this.m.size;
+  }
+  key(i: number) {
+    return [...this.m.keys()][i] ?? null;
+  }
   getItem(k: string) {
     return this.m.has(k) ? this.m.get(k)! : null;
   }
@@ -75,7 +81,7 @@ describe("browser vault (task board #67-#76)", () => {
   it("keeps the key across a reload, then wipes it for good with a receipt", async () => {
     const { key, keyId } = await vault.newJobKey();
     const env = await vault.encryptText(key, keyId, "secret", { jobId: "7", objectType: "result" });
-    await vault.storeKey("7", key, keyId);
+    await vault.storeKey("7", key, keyId, Math.floor(Date.now() / 1000) + 600);
 
     const reloaded = await vault.loadKey("7");
     expect(reloaded?.keyId).toBe(keyId);
@@ -90,5 +96,33 @@ describe("browser vault (task board #67-#76)", () => {
     expect(await vault.loadKey("7")).toBeNull();
     expect(vault.loadWipeReceipt("7")).toEqual(receipt);
     expect(vault.wipeKey("7", 1)).toEqual(receipt); // idempotent
+  });
+
+  it("fails closed: an expired key is wiped on load and never used", async () => {
+    const { key, keyId } = await vault.newJobKey();
+    await vault.storeKey("8", key, keyId, Math.floor(Date.now() / 1000) - 1);
+    expect(await vault.loadKey("8")).toBeNull();
+    expect(vault.hasKey("8")).toBe(false);
+    expect(vault.loadWipeReceipt("8")?.status).toBe("wiped");
+  });
+
+  it("wipes expired keys found in storage even when no job list points to them", async () => {
+    const a = await vault.newJobKey();
+    const b = await vault.newJobKey();
+    const now = Math.floor(Date.now() / 1000);
+    await vault.storeKey("old", a.key, a.keyId, now - 5);
+    await vault.storeKey("live", b.key, b.keyId, now + 600);
+    g.window.sessionStorage.setItem("enigma.key.broken", "not json");
+    expect(vault.wipeExpiredKeys(now)).toBe(2);
+    expect(vault.hasKey("old")).toBe(false);
+    expect(vault.hasKey("broken")).toBe(false);
+    expect(vault.hasKey("live")).toBe(true);
+  });
+
+  it("wipes every key when the job list is cleared", async () => {
+    const a = await vault.newJobKey();
+    await vault.storeKey("9", a.key, a.keyId, Math.floor(Date.now() / 1000) + 600);
+    vault.wipeAllKeys();
+    expect(vault.hasKey("9")).toBe(false);
   });
 });
