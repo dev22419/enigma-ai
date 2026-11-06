@@ -43,16 +43,16 @@ export function Seal({ className = "size-28 text-night" }: { className?: string 
 
 export function Certificate() {
   return (
-    <section id="certificate" className="bg-paper text-ink">
-      <div className="mx-auto grid max-w-[1280px] grid-cols-1 gap-16 px-4 py-24 sm:px-8 md:py-32 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
+    <section id="certificate" className="relative text-frost">
+      <div className="mx-auto grid max-w-[1280px] grid-cols-1 gap-16 px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
         <div>
           <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">The receipt outlives the data</h2>
-          <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-ink-soft">
+          <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/70">
             Every job ends with two records: the job on Whitechain, and a destruction receipt signed by Enigma&rsquo;s
             oracle key. Both hold hashes and timestamps only. You can show an auditor what happened without showing
             them the document.
           </p>
-          <ul className="mt-10 divide-y divide-ink/10 border-y border-ink/10">
+          <ul className="mt-10 divide-y divide-frost/10 border-y border-frost/10">
             {CHECKS.map(([k, v]) => (
               <li key={k} className="flex gap-4 py-4">
                 <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-volt text-night">
@@ -61,8 +61,8 @@ export function Certificate() {
                   </svg>
                 </span>
                 <div>
-                  <p className="text-[15px] font-semibold capitalize">{k}</p>
-                  <p className="mt-1 text-[15px] leading-snug text-ink-soft">{v}</p>
+                  <p className="text-[15px] font-semibold first-letter:uppercase">{k}</p>
+                  <p className="mt-1 text-[15px] leading-snug text-frost-soft">{v}</p>
                 </div>
               </li>
             ))}
@@ -70,7 +70,8 @@ export function Certificate() {
         </div>
 
         <figure className="relative">
-          <div className="relative rotate-[0.6deg] rounded-[4px] bg-sheet p-2 shadow-[0_1px_0_var(--rule),0_40px_80px_-40px_rgb(2_7_10/0.45)]">
+          <div className="pointer-events-none absolute -inset-10 -z-10 bg-[radial-gradient(ellipse_at_center,rgb(2_151_222/0.22),transparent_65%)] blur-2xl" aria-hidden="true" />
+          <div className="relative rotate-[0.6deg] rounded-[4px] bg-sheet p-2 text-ink shadow-[0_0_0_1px_rgb(255_255_255/0.4),0_50px_120px_-30px_rgb(2_151_222/0.45),0_30px_80px_-40px_rgb(252_115_77/0.4)]">
             <div className="border-[1.5px] border-night p-1">
               <div className="relative border border-night/30">
                 <div className="relative h-14 overflow-hidden border-b border-night/20">
@@ -126,7 +127,7 @@ export function Certificate() {
               </div>
             </div>
           </div>
-          <figcaption className="mt-5 font-mono text-[11px] text-ink-soft">Sample values. Real receipts come from /api/jobs/[id]/receipt.</figcaption>
+          <figcaption className="mt-5 font-mono text-[11px] text-frost-soft">Sample values. Real receipts come from /api/jobs/[id]/receipt.</figcaption>
         </figure>
       </div>
     </section>

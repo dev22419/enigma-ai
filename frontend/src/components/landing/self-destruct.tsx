@@ -69,9 +69,9 @@ export function SelfDestruct() {
   }
 
   return (
-    <section id="lifespan" className="relative overflow-hidden bg-night text-frost">
+    <section id="lifespan" className="relative overflow-hidden text-frost">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] bg-[radial-gradient(ellipse_50%_60%_at_70%_100%,rgb(2_151_222/0.22),transparent_70%)]" aria-hidden="true" />
-      <div className="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-14 px-4 py-24 sm:px-8 md:py-32 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
+      <div className="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-14 px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
         <div>
           <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">You choose when the answer dies</h2>
           <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/75">

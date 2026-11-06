@@ -40,8 +40,8 @@ export function UseCases() {
   const c = CASES[active];
 
   return (
-    <section className="border-t border-night-line bg-night-2 text-frost">
-      <div className="mx-auto max-w-[1280px] px-4 py-24 sm:px-8 md:py-32">
+    <section className="relative text-frost">
+      <div className="mx-auto max-w-[1280px] px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12">
         <p className="max-w-[30rem] text-[17px] leading-relaxed text-frost-soft">Who it&rsquo;s for</p>
 
         <div role="tablist" aria-label="Who uses Enigma" className="mt-4 flex flex-col items-start gap-1 md:flex-row md:flex-wrap md:gap-x-10">
