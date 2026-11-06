@@ -72,6 +72,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     event JobCreated(
         uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment, uint32 expirySeconds
     );
+    event JobProcessing(uint256 indexed jobId);
     event JobCompleted(
         uint256 indexed jobId,
         address indexed user,
@@ -98,6 +99,11 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error UnauthorizedSigner();
     error SignerAlreadyRegistered();
     error SignerNotRegistered();
+
+    modifier onlySigner() {
+        if (!isSigner[msg.sender]) revert UnauthorizedSigner();
+        _;
+    }
 
     constructor(IERC20 usdt_, address provider_, uint256 queryPrice_, uint64 jobTimeout_, address initialOwner)
         Ownable(initialOwner)
@@ -158,6 +164,16 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit JobCreated(jobId, msg.sender, fileHash, price, expirySeconds);
     }
 
+    /// @notice A registered signer acknowledges a job and marks it as being processed.
+    ///         Payment stays locked; the job can still be completed, failed or refunded.
+    function startProcessing(uint256 jobId) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Pending) revert InvalidJobStatus();
+        if (block.timestamp > job.deadline) revert JobTimedOut();
+        job.status = Status.Processing;
+        emit JobProcessing(jobId);
+    }
+
     /// @notice Release payment to the provider once a registered signer attests to the result.
     ///         Callable by anyone (typically the backend relayer) with the oracle signature.
     function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes calldata signature)
@@ -165,7 +181,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         nonReentrant
     {
         Job storage job = _jobs[jobId];
-        if (job.status != Status.Pending) revert InvalidJobStatus();
+        if (job.status != Status.Pending && job.status != Status.Processing) revert InvalidJobStatus();
         if (block.timestamp > job.deadline) revert JobTimedOut();
 
         bytes32 digest = _hashTypedDataV4(
