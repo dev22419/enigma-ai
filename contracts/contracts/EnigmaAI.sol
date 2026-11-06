@@ -52,6 +52,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
 
     uint32 public constant MIN_EXPIRY = 1 minutes; // the 2-minute demo timer and the backend's 60s floor must fit
     uint32 public constant MAX_EXPIRY = 30 days;
+    uint256 public constant MAX_REASON_LENGTH = 128; // bytes; the reason is a public event, never put user data in it
 
     IERC20 public immutable usdt;
 
@@ -81,6 +82,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         address signer,
         uint64 expiresAt
     );
+    event JobFailed(uint256 indexed jobId, string reason);
     event JobRefunded(uint256 indexed jobId, address indexed user, uint256 amount);
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
@@ -93,6 +95,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error InsufficientBalance();
     error InvalidExpiry();
     error InvalidJobStatus();
+    error ReasonTooLong();
     error NotJobOwner();
     error JobTimedOut();
     error JobNotTimedOut();
@@ -200,6 +203,17 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit JobCompleted(
             jobId, job.user, resultHash, attestationHash, signer, uint64(block.timestamp) + job.expirySeconds
         );
+    }
+
+    /// @notice A registered signer reports that a job could not be completed. The payment stays locked
+    ///         but becomes refundable immediately instead of waiting for the deadline.
+    /// @param reason short, non-sensitive cause (e.g. "provider timeout"). It is emitted publicly.
+    function failJob(uint256 jobId, string calldata reason) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Pending && job.status != Status.Processing) revert InvalidJobStatus();
+        if (bytes(reason).length > MAX_REASON_LENGTH) revert ReasonTooLong();
+        job.status = Status.Failed;
+        emit JobFailed(jobId, reason);
     }
 
     /// @notice Return a pending job's locked payment to the user's balance after the timeout.
