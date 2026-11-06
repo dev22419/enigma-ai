@@ -163,9 +163,15 @@ export function WalletBox() {
 
 const FAUCET = parseUnits("100", USDT_DECIMALS);
 
+/** Plain words for the errors wallets give back, or null if this isn't one. */
+export function walletProblem(message: string) {
+  if (/user rejected|user denied|denied/i.test(message)) return "You declined the request in your wallet.";
+  if (/not been authorized/i.test(message)) return "Your wallet isn't allowing this account on this site. Disconnect, connect again, then retry.";
+  return null;
+}
+
 function oneLine(message: string) {
-  const first = message.split("\n")[0];
-  return /user rejected|denied/i.test(first) ? "You declined the request in your wallet." : first.slice(0, 160);
+  return walletProblem(message) ?? message.split("\n")[0].slice(0, 160);
 }
 
 /** Add prepaid credit: get test USDT, approve Enigma to take it, deposit. Each step is one wallet confirmation. */

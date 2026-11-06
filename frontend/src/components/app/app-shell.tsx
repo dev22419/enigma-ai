@@ -76,7 +76,7 @@ function Sidebar() {
         <Link href="/" aria-label="Enigma home" className="opacity-90 transition-opacity hover:opacity-100">
           <Logo className="[&_span]:text-[16px]" />
         </Link>
-        <Link href="/chat" aria-label="New conversation" title="New conversation" className="grid size-8 place-items-center rounded-lg text-frost/60 transition-colors hover:bg-frost/[0.07] hover:text-frost">
+        <Link href="/chat" aria-label="New conversation" title="New conversation" className="grid size-8 place-items-center rounded-full text-frost/60 transition-colors hover:bg-frost/[0.07] hover:text-frost">
           <SquarePen className="size-[16px]" strokeWidth={1.75} />
         </Link>
       </div>
@@ -86,7 +86,7 @@ function Sidebar() {
           <Link
             key={href}
             href={href}
-            className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px] transition-colors", on ? "bg-frost/[0.1] text-frost" : "text-frost/65 hover:bg-frost/[0.05] hover:text-frost")}
+            className={cn("flex items-center gap-2.5 rounded-full px-3 py-1.5 text-[14px] transition-colors", on ? "bg-frost/[0.1] text-frost" : "text-frost/65 hover:bg-frost/[0.05] hover:text-frost")}
           >
             <Icon className="size-[15px]" strokeWidth={1.8} />
             {label}
@@ -109,7 +109,7 @@ function Sidebar() {
                     <Link
                       href={`/chat?t=${t.id}`}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[14px] transition-colors",
+                        "flex items-center gap-2 rounded-full px-3 py-1.5 text-[14px] transition-colors",
                         current === t.id ? "bg-frost/[0.07] text-frost" : "text-frost/70 hover:bg-frost/[0.04] hover:text-frost",
                       )}
                     >

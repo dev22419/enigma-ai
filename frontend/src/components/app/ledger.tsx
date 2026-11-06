@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import { loadWipeReceipt } from "@/lib/client/vault";
-import { DepositFlow, useMounted } from "./wallet";
+import { DepositFlow, WalletBox, useMounted } from "./wallet";
 import { cn } from "@/lib/utils";
 import { TaskChip } from "./bits";
 import { ApiError, countdown, forgetAll, getBalance, knownAddress, localPhase, short, ttlLabel, useIndex, useNow, type Phase } from "./jobs";
@@ -90,6 +90,7 @@ export function Ledger() {
   const [history, setHistory] = useState<HistoryJob[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
+  const [loads, setLoads] = useState(0);
 
   useEffect(() => {
     if (!address) return;
@@ -111,14 +112,24 @@ export function Ledger() {
     return () => {
       off = true;
     };
-  }, [address]);
+  }, [address, loads]);
+
+  // A deposit changes the balance, so read it again
+  useEffect(() => {
+    const again = () => setLoads((n) => n + 1);
+    window.addEventListener("enigma:credit", again);
+    return () => window.removeEventListener("enigma:credit", again);
+  }, []);
 
   if (!index || !now) return <p className="p-12 font-mono text-[12px] text-frost-soft">Opening the ledger…</p>;
 
   // Jobs from the chain for this wallet, joined with names from this browser; then local-only previews.
+  // What was read for a wallet leaves with it
+  const onChain = address ? history : null;
+  const credit = address ? balance : null;
   const byId = new Map(index.map((e) => [e.id, e]));
   const rows: Row[] = [
-    ...(history ?? []).map((h): Row => {
+    ...(onChain ?? []).map((h): Row => {
       const e = byId.get(String(h.jobId));
       const exp = h.expiresAt ? h.expiresAt * 1000 : null;
       const phase: Phase =
@@ -126,7 +137,7 @@ export function Ledger() {
       return { id: String(h.jobId), fileName: e?.fileName ?? `Job ${h.jobId}`, task: e?.task ?? null, ttl: h.expirySeconds, expiresAt: exp, phase, preview: false, tx: h.completeTxHash, verified: h.destruction?.valid ?? null };
     }),
     ...index
-      .filter((e) => e.preview || !history)
+      .filter((e) => e.preview || !onChain)
       .map((e): Row => ({ id: e.id, fileName: e.fileName, task: e.task, ttl: e.ttl, expiresAt: e.expiresAt, phase: localPhase(e, now), preview: e.preview, tx: null, verified: null })),
   ].sort((a, b) => (b.expiresAt ?? 0) - (a.expiresAt ?? 0));
 
@@ -135,8 +146,8 @@ export function Ledger() {
   const shown = filter ? rows.filter((r) => r.task === filter) : rows;
 
   const stats: [string, string, string, string][] = [
-    ["Prepaid balance", balance ? Number(balance.balance).toFixed(2) : "–", "USDT", ""],
-    ["Jobs left", balance ? String(balance.queriesRemaining) : "–", balance ? `at ${Number(balance.queryPrice).toFixed(2)} each` : "", ""],
+    ["Prepaid balance", credit ? Number(credit.balance).toFixed(2) : "–", "USDT", ""],
+    ["Jobs left", credit ? String(credit.queriesRemaining) : "–", credit ? `at ${Number(credit.queryPrice).toFixed(2)} each` : "", ""],
     ["Readable now", String(live.length), "keys still alive", "text-volt-lit"],
     ["Destroyed", String(destroyed), "receipts kept", "text-orchid"],
   ];
@@ -156,6 +167,11 @@ export function Ledger() {
         </div>
       </div>
 
+      {/* The sidebar's wallet box is hidden on small screens */}
+      <div className="mt-4 rounded-xl bg-frost/[0.05] p-3 lg:hidden">
+        <WalletBox />
+      </div>
+
       <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-[14px] bg-frost/[0.07] lg:grid-cols-4">
         {stats.map(([label, value, note, tone]) => (
           <div key={label} className="bg-[#242424]/90 p-4">
@@ -168,7 +184,7 @@ export function Ledger() {
         ))}
       </dl>
 
-      {error && <p className="mt-4 font-mono text-[12px] text-orchid">Couldn&rsquo;t load on-chain data: {error}</p>}
+      {error && address && <p className="mt-4 font-mono text-[12px] text-orchid">Couldn&rsquo;t load on-chain data: {error}</p>}
 
       <div className="mt-7 grid gap-7 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">

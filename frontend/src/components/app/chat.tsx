@@ -4,16 +4,17 @@
 import { ArrowUp, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { useSignMessage } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
+import { withImageNote } from "@/lib/image-note";
 import { cn } from "@/lib/utils";
 import { DotOrb, OrbMark } from "./orb";
 import { useFullWave } from "./wave";
-import { ConnectPill, useGate, type Gate } from "./wallet";
+import { ConnectPill, useGate, walletProblem, type Gate } from "./wallet";
 import {
   ApiError,
   TTL_OPTIONS,
@@ -49,7 +50,8 @@ const MAX_CHARS = 8_000_000;
 const TEXT_EXT = /\.(txt|md|csv|json|log|xml|html?)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
-type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number };
+// `src` is only for showing the image in this tab. It is never sent.
+type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number; src?: string };
 type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
 type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null; jobId?: string };
 type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
@@ -175,7 +177,8 @@ export function Chat({ samples }: { samples: Sample[] }) {
       setSent((s) => ({ ...s, [res.jobId]: out }));
       setPending((p) => p.filter((x) => x.key !== key));
     } catch (e) {
-      const err = e instanceof ApiError ? e : new ApiError("Something went wrong sending this message.", 0);
+      const said = walletProblem(e instanceof Error ? e.message : "");
+      const err = e instanceof ApiError ? e : new ApiError(said ?? "Something went wrong sending this message.", 0);
       setPending((p) => p.map((x) => (x.key === key ? { ...x, error: err } : x)));
     }
   }
@@ -271,7 +274,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
   return (
-    <label className="relative flex min-w-0 items-center gap-1 rounded-lg py-1 pr-2 pl-2 text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
+    <label className="relative flex min-w-0 items-center gap-1 rounded-full py-1 pr-2 pl-2.5 text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
       <span className="sr-only">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
         {children}
@@ -301,6 +304,7 @@ function Composer({
   areaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const [err, setErr] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const { text, att, task, ttl } = draft;
 
@@ -319,12 +323,17 @@ function Composer({
       let next: Attachment;
       if (IMAGE_EXT.test(f.name)) {
         // The API wants the image as raw base64 (it builds the data URL itself), not a full data URL.
-        const content = (await readAsDataUrl(f)).replace(/^data:[^,]*,/, "");
+        const src = await readAsDataUrl(f);
+        const content = src.replace(/^data:[^,]*,/, "");
         if (content.length > MAX_CHARS) throw new Error("big");
-        next = { name: f.name, content, kind: "image", bytes: f.size };
+        next = { name: f.name, content, kind: "image", bytes: f.size, src };
       } else if (TEXT_EXT.test(f.name) || f.type.startsWith("text/")) {
         const content = await f.text();
         if (content.length > MAX_CHARS) throw new Error("big");
+        if (!content.trim()) {
+          setErr("That file is empty.");
+          return;
+        }
         next = { name: f.name, content, kind: "text", bytes: f.size };
       } else {
         setErr("Only text files and images for now. For a PDF, paste its text instead.");
@@ -332,7 +341,7 @@ function Composer({
       }
       setDraft((d) => ({ ...d, att: next }));
     } catch (e) {
-      setErr(e instanceof Error && e.message === "big" ? "That file is over the 8 MB limit." : "That file couldn't be read.");
+      setErr(e instanceof Error && e.message === "big" ? "That file is too large. The limit is 6 MB for images and 8 MB for text." : "That file couldn't be read.");
     }
   }
 
@@ -343,7 +352,7 @@ function Composer({
     const typed = text.trim();
     let out: Outgoing;
     if (att?.kind === "image") {
-      out = { label: att.name, content: att.content, fileName: att.name, task, ttl, text: typed, attachment: att };
+      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, task, ttl, text: typed, attachment: att };
     } else if (att) {
       // The model treats everything as document content, so notes travel with the document, clearly marked.
       const content = typed ? `${att.content}\n\nNOTES FROM THE SENDER\n${typed}` : att.content;
@@ -352,6 +361,13 @@ function Composer({
       out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", task, ttl, text: typed, attachment: null };
     }
     onSend(out);
+  }
+
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = e.clipboardData.files?.[0];
+    if (!pasted) return;
+    e.preventDefault();
+    attach(pasted);
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -364,19 +380,36 @@ function Composer({
   return (
     <div>
       <div
-        className="rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)]"
-        onDragOver={(e) => e.preventDefault()}
+        className={cn(
+          "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
+          dragging && "shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1.5px_rgb(255_255_255/0.5)]",
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          setDragging(false);
           attach(e.dataTransfer.files?.[0]);
         }}
       >
         {att && (
           <div className="flex items-center gap-2.5 px-4 pt-3.5 text-[13px]">
-            {att.kind === "image" ? <ImageIcon className="size-4 text-volt-lit" /> : <FileText className="size-4 text-volt-lit" />}
+            {att.src ? <Thumb src={att.src} className="size-11" /> : <FileText className="size-4 text-volt-lit" />}
             <span className="min-w-0 truncate text-frost/90">{att.name}</span>
             <span className="shrink-0 text-frost-soft/70">{kb(att.bytes)}</span>
-            <button onClick={() => setDraft((d) => ({ ...d, att: null }))} aria-label="Remove attachment" className="ml-auto grid size-6 place-items-center rounded-md text-frost-soft hover:bg-frost/10 hover:text-frost">
+            <button
+              onClick={() => {
+                setErr(null);
+                setDraft((d) => ({ ...d, att: null }));
+              }}
+              aria-label="Remove attachment"
+              className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-frost-soft hover:bg-frost/10 hover:text-frost"
+            >
               <X className="size-3.5" />
             </button>
           </div>
@@ -391,14 +424,14 @@ function Composer({
           value={text}
           onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
           onKeyDown={onKey}
-          disabled={att?.kind === "image"}
-          placeholder={att?.kind === "image" ? "The image is sent on its own." : att ? "Add a note (optional)" : "Paste a document or attach one"}
-          className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none disabled:opacity-50"
+          onPaste={onPaste}
+          placeholder={att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste a document or attach one"}
+          className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
         />
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
           <button
             onClick={() => file.current?.click()}
-            className="grid size-8 place-items-center rounded-lg text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
+            className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
             aria-label="Attach a text file or image"
             title="Attach a text file or image"
           >
@@ -426,6 +459,7 @@ function Composer({
               onClick={submit}
               disabled={!canSend}
               aria-label="Send"
+              title={busy ? "Enigma is still working on your last message" : undefined}
               className={cn(
                 "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
                 !(gate.kind === "ok" && gate.price) && "ml-auto",
@@ -439,7 +473,7 @@ function Composer({
           ref={file}
           type="file"
           className="sr-only"
-          accept=".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,text/*,image/*"
+          accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,text/*"
           onChange={(e) => {
             attach(e.target.files?.[0]);
             e.target.value = "";
@@ -468,12 +502,19 @@ function Composer({
 
 /* ================================================================== messages */
 
+function Thumb({ src, className }: { src: string; className?: string }) {
+  // A data URL held in this tab, so next/image has nothing to optimise
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" className={cn("shrink-0 rounded-lg object-cover", className)} />;
+}
+
 function UserMessage({ label, out, ttl, task }: { label: string; out?: Outgoing; ttl: number; task: Task | null }) {
   const typed = out?.text ?? "";
   const doc = out?.attachment;
   return (
     <div className="rise flex flex-col items-end">
       <div className="max-w-[85%] rounded-[16px] bg-frost/[0.06] px-4 py-3">
+        {doc?.src && <Thumb src={doc.src} className="mb-2.5 max-h-56 w-full max-w-72" />}
         {(doc || !out) && (
           <p className="flex items-center gap-2 text-[14px] text-frost/90">
             {doc?.kind === "image" ? <ImageIcon className="size-4 shrink-0 text-volt-lit" /> : <FileText className="size-4 shrink-0 text-volt-lit" />}
@@ -666,7 +707,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
                   Continue as a preview
                 </Button>
               )}
-              <button onClick={onRetry} className="rounded-md px-2.5 py-1.5 text-[13px] text-frost/70 hover:bg-frost/[0.05] hover:text-frost">
+              <button onClick={onRetry} className="rounded-full px-3 py-1.5 text-[13px] text-frost/70 hover:bg-frost/[0.05] hover:text-frost">
                 Try again
               </button>
             </div>
