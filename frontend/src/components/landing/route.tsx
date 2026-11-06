@@ -11,10 +11,10 @@ type Stop = { n: string; name: string; does: string; sees: string };
 
 /** Mirrors POST /api/jobs on master: who touches the document, and what they can read. */
 const STOPS: Record<string, Stop> = {
-  api: { n: "01", name: "Enigma API", does: "Makes a key for this job and encrypts the document with it", sees: "The document, in memory" },
+  api: { n: "01", name: "Your browser", does: "Makes the job's key, encrypts the document and the answer, wipes the key at expiry", sees: "Everything, and holds the only key" },
   storage: { n: "02", name: "0G Storage", does: "Keeps the encrypted copy", sees: "Ciphertext" },
   chain: { n: "03", name: "Whitechain", does: "Holds your payment, then records the receipt", sees: "Hashes" },
-  tee: { n: "04", name: "0G Compute", does: "Runs 0G's model inside an Intel TDX enclave", sees: "The document, sealed" },
+  tee: { n: "04", name: "0G Compute", does: "Runs 0G's model inside an Intel TDX enclave. The document reaches it through Enigma's proxy, in transit only", sees: "The document, sealed" },
   arkiv: { n: "05", name: "Arkiv", does: "Stores the encrypted answer and drops it at expiry", sees: "Ciphertext" },
 };
 
@@ -74,8 +74,8 @@ export function Route() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end">
           <h2 className="display text-[clamp(2.3rem,5vw,4.4rem)]">Where your document goes</h2>
           <p className="max-w-[28rem] text-[17px] leading-relaxed text-frost/70 lg:pb-2">
-            Five systems handle each job, and each one only gets what its part needs. The document is read inside
-            the enclave. Everything that gets stored is encrypted.
+            Five systems handle each job, and each one only gets what its part needs. The key never leaves your
+            browser, the document is read inside the enclave, and everything that gets stored is encrypted.
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export function Route() {
 
           <AnimatedBeam {...beam} fromRef={api} toRef={chain} curvature={-20} delay={0} />
           <AnimatedBeam {...beam} fromRef={api} toRef={storage} curvature={20} delay={0.5} />
-          <AnimatedBeam {...beam} fromRef={storage} toRef={tee} curvature={20} delay={1.1} />
+          <AnimatedBeam {...beam} fromRef={api} toRef={tee} curvature={-60} delay={1.1} />
           <AnimatedBeam {...beam} fromRef={tee} toRef={arkiv} delay={1.8} />
           <AnimatedBeam {...beam} fromRef={tee} toRef={chain} curvature={-20} reverse delay={2.4} />
         </div>

@@ -18,7 +18,7 @@ const FIELDS: [string, string][] = [
 const CHECKS = [
   ["attestation", "0G's model ran inside a TDX enclave, and the attestation hash is on-chain."],
   ["result hash", "The answer you received matches the hash the contract recorded."],
-  ["key destroyed", "The job's key was wiped at expiry. The receipt saying so is signed by the oracle, and the signature checks out."],
+  ["key destroyed", "Your browser wiped the job's key at expiry and kept a receipt of it. The ciphertext on Arkiv can't be opened again."],
 ];
 
 export function Seal({ className = "size-28 text-night" }: { className?: string }) {
@@ -48,8 +48,8 @@ export function Certificate() {
         <div>
           <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">The receipt outlives the data</h2>
           <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/70">
-            Every job ends with two records: the job on Whitechain, and a destruction receipt signed by Enigma&rsquo;s
-            oracle key. Both hold hashes and timestamps only. You can show an auditor what happened without showing
+            Every job ends with two records: the completed job on Whitechain, and the receipt your browser keeps when it
+            wipes the key. Both hold hashes and timestamps only. You can show an auditor what happened without showing
             them the document.
           </p>
           <ul className="mt-10 divide-y divide-frost/10 border-y border-frost/10">

@@ -75,8 +75,8 @@ export function SelfDestruct() {
         <div>
           <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">You choose when the answer dies</h2>
           <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/75">
-            Set a lifespan from one minute to 30 days. When it ends, Arkiv drops the encrypted answer and Enigma
-            destroys the key that opens it. Any copy left anywhere stays locked for good.
+            Set a lifespan from one minute to 30 days. When it ends, Arkiv drops the encrypted answer and
+            your browser wipes the only key that opens it. Any copy left anywhere stays locked for good.
           </p>
 
           <div className="mt-10" role="radiogroup" aria-label="Lifespan">

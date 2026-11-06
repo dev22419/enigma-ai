@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * The hero's product moment: one job from upload to key destruction, replayed.
- * Mirrors what POST /api/jobs does on the server. Sample data throughout.
+ * Mirrors the real flow: browser encrypts, /api/jobs, /api/infer, /api/jobs/[id]/result. Sample data throughout.
  */
 const STAGES = [
   { key: "encrypt", label: "Encrypt", ms: 2600 },
@@ -150,7 +150,7 @@ function Encrypt() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[14px] font-semibold">clinic_summary.pdf</p>
-          <p className="font-mono text-[11px] text-frost-soft">Encrypted with a one-time AES-256 key</p>
+          <p className="font-mono text-[11px] text-frost-soft">Encrypted in your browser, AES-256-GCM</p>
         </div>
       </div>
       <div className="mt-4 h-1 overflow-hidden rounded-full bg-frost/10">
@@ -269,8 +269,8 @@ function Destroyed() {
         <span className="block text-center font-mono text-[9.5px] tracking-[0.2em]">KEY GONE, DATA UNREADABLE</span>
       </div>
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-dashed border-frost/20 pt-3 font-mono text-[11px]">
-        <span className="text-frost-soft">Receipt signed by the oracle</span>
-        <span className="text-volt-lit">0x7a3f…c210</span>
+        <span className="text-frost-soft">Key wiped by your browser</span>
+        <span className="text-volt-lit">receipt 0x7a3f…c210</span>
       </div>
     </div>
   );

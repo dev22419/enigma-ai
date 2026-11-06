@@ -23,7 +23,7 @@ export function Hero() {
         </h1>
         <p className="mt-7 max-w-[40rem] text-[17px] leading-[1.6] text-frost/80 sm:text-[18px]">
           Upload a medical record, a contract or a bank statement. 0G&rsquo;s model reads it inside a sealed
-          enclave, the answer is encrypted with a key made for that one job, and when your timer runs out the key
+          enclave, your browser encrypts the answer with a key only it holds, and when your timer runs out the key
           is destroyed. Whitechain keeps a receipt that proves it.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
