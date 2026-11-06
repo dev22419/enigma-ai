@@ -1,3 +1,15 @@
+// TRUST BOUNDARY — Auth-only proxy for 0G TEE inference
+//
+// This route proxies the browser's plaintext to 0G Compute's TEE (Intel TDX).
+// It MUST see the plaintext to (a) verify the fileHash and (b) wrap it in the
+// task-specific system prompt before forwarding. It NEVER stores, logs, or
+// persists the plaintext — it exists in memory only for the duration of this
+// request. Combined with X-0G-Provider-Trust-Mode: private, the request is
+// routed exclusively to TeeML providers (sealed enclaves).
+//
+// See docs/privacy-roadmap.md for the production path (Path B: direct
+// browser→TEE, eliminating this transit entirely).
+
 import { NextRequest, NextResponse } from "next/server";
 import { TASK_TYPES } from "@/lib/constants";
 import { runInference, getTeeAttestation, mimeTypeFromFileName } from "@/lib/og-inference";
@@ -39,8 +51,7 @@ export async function POST(req: NextRequest) {
     return fail(400, "jobId is required");
   }
 
-  // Reading costs real 0G credit, so it only runs for a job that was opened and paid for,
-  // for the exact document that job was opened with, and only a few times.
+  // --- Verify this is a paid, active job for this exact document ---
   const token = req.headers.get("x-access-token") ?? "";
   if (!token) return fail(401, "Missing x-access-token header");
   const row = (await readStore()).jobs[body.jobId];
@@ -65,8 +76,7 @@ export async function POST(req: NextRequest) {
   if (claim === "busy") return fail(409, "This job is already being read");
   if (claim === "limit") return fail(429, "Too many attempts for this job");
   if (claim === "missing") return fail(404, "Job not found");
-  // A failed reading frees the job for another try. After the last allowed try the job is failed on-chain,
-  // which makes the payment refundable at once instead of after the timeout.
+
   const release = async (reason = "inference failed") => {
     const spent = await withStore((d) => {
       const r = d.jobs[body.jobId];
@@ -82,6 +92,10 @@ export async function POST(req: NextRequest) {
     if (spent) await failJobOnChain(Number(body.jobId), "inference failed after 3 tries").catch(() => undefined);
   };
 
+  // --- Forward to 0G TEE (private mode: TeeML providers only) ---
+  // The plaintext is held in memory for this call only. It is never written
+  // to disk, logged, stored in the job record, or sent anywhere except the
+  // 0G TEE endpoint over TLS.
   try {
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
     const { image, note } = isImage ? splitImageNote(body.content) : { image: undefined, note: undefined };
@@ -127,7 +141,6 @@ export async function POST(req: NextRequest) {
       requestId: inference.requestId,
       model: inference.model,
     };
-    // Remember what the enclave said. The result route will only sign for these exact values.
     await withStore((d) => {
       const r = d.jobs[body.jobId];
       if (r) {

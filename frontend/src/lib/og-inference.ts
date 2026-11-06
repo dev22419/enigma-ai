@@ -1,3 +1,6 @@
+// All 0G requests use X-0G-Provider-Trust-Mode: private, which routes exclusively
+// to TeeML providers (Intel TDX enclaves). The 0G router returns 503 rather than
+// silently falling back to a non-TEE provider.
 import { ZG_API_URL, ZG_FALLBACK_MODEL, ZG_MODEL, SYSTEM_PROMPTS, type TaskType } from "./constants";
 
 interface ChatMessage {
@@ -79,6 +82,7 @@ ${note}` : "Analyze this document:" },
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
+        "X-0G-Provider-Trust-Mode": "private",
       },
       body: JSON.stringify({
         model: m,

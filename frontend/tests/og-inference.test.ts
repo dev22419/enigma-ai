@@ -36,6 +36,14 @@ afterEach(() => {
 });
 
 describe("model choice", () => {
+  it("sends X-0G-Provider-Trust-Mode: private on every request", async () => {
+    const { runInference } = await load();
+    const f = fetchSequence(answer());
+    await runInference("medical", "document text");
+    const headers = f.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers["X-0G-Provider-Trust-Mode"]).toBe("private");
+  });
+
   it("uses 0G's own model by default and records it", async () => {
     const { runInference } = await load();
     const f = fetchSequence(answer());
