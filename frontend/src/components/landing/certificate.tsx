@@ -113,7 +113,7 @@ export function Certificate() {
               transition={{ duration: 1.5, ease: [0.3, 0, 0.2, 1] }}
             >
               <div className="ticket relative bg-night-3 pb-10">
-                <div className="relative h-14 overflow-hidden bg-[linear-gradient(90deg,var(--volt),#000_58%,var(--melon))]">
+                <div className="relative h-14 overflow-hidden bg-[linear-gradient(90deg,var(--volt),#000_58%,var(--orchid))]">
                   <div className="flute absolute inset-0" aria-hidden="true" />
                   <p className="absolute inset-x-5 bottom-2.5 flex justify-between font-mono text-[11px] text-frost">
                     <span>Enigma receipt</span>

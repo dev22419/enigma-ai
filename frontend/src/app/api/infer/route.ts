@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TASK_TYPES } from "@/lib/constants";
 import { runInference, getTeeAttestation, mimeTypeFromFileName } from "@/lib/og-inference";
+import { splitImageNote } from "@/lib/image-note";
 import { hashContent } from "@/lib/oracle-signer";
 import { safeErrorMessage } from "@/lib/redact";
 import { tokensEqual } from "@/lib/crypto";
@@ -97,11 +98,13 @@ export async function POST(req: NextRequest) {
   // 0G TEE endpoint over TLS.
   try {
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
+    const { image, note } = isImage ? splitImageNote(body.content) : { image: undefined, note: undefined };
     const inference = await runInference(
       body.taskType,
       body.content,
-      isImage ? body.content : undefined,
-      mimeTypeFromFileName(body.fileName)
+      image,
+      mimeTypeFromFileName(body.fileName),
+      note
     );
 
     if (!inference.chatId) {

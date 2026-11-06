@@ -9,8 +9,8 @@ import { WagmiProvider } from "wagmi";
 
 import { wagmiConfig } from "@/lib/client/chain";
 
-// The wallet modal in the app's own colours: midnight, frost text, cantaloupe as the one accent.
-const theme = darkTheme({ accentColor: "#fc734d", accentColorForeground: "#02070a", borderRadius: "medium", fontStack: "system" });
+// The wallet modal in the app's own colours: charcoal, with white for the main action.
+const theme = darkTheme({ accentColor: "#f5f5f5", accentColorForeground: "#1c1c1c", borderRadius: "medium", fontStack: "system" });
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(() => new QueryClient());

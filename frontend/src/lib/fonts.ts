@@ -1,5 +1,5 @@
 // AI-assisted: Used Claude to write this file.
-import { IBM_Plex_Mono, IBM_Plex_Sans, Cinzel } from "next/font/google";
+import { Geist, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 export const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -15,10 +15,8 @@ export const plexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
-// Roman capitals for the hero wordmark only
-export const cinzel = Cinzel({
-  variable: "--font-title",
+export const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
-  weight: ["600"],
   display: "swap",
 });

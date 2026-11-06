@@ -1,43 +1,105 @@
-// AI-assisted: Used Claude to design and write this file.
+// AI-assisted: Used Claude to write this file. The orb's motion is the `composing` state of thinking-orbs (MIT).
 "use client";
 
-import { FlutedGlass } from "@/components/landing/fluted-glass";
+import { useEffect, useRef } from "react";
+import { MODE_FRAMES, resolvePreset, type OrbFrame } from "thinking-orbs/engine";
+
 import { cn } from "@/lib/utils";
 
+type Rgb = readonly [number, number, number];
+
+const BLUE: Rgb = [2, 151, 222];
+const LIT: Rgb = [92, 196, 255];
+const ORCHID: Rgb = [229, 156, 244];
+const PETAL: Rgb = [242, 200, 248];
+const REST_TIME = 0.6; // the frame thinking-orbs shows for reduced motion
+
+const mix = (a: Rgb, b: Rgb, k: number): Rgb => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+const clamp = (v: number) => Math.min(1, Math.max(0, v));
+
 /**
- * The enclave orb: the landing page's fluted glass, seen through a sphere.
- * A turning halo of blue and cantaloupe sits behind it, a glass highlight on top.
+ * The package only paints in one ink, so its dots are painted here instead: position, size and depth come
+ * straight from the engine, and colour runs from Electric Blue on the left to orchid on the right.
+ * `white` is the engine's ink value: 0 is the nearest, brightest dot on a dark background.
  */
-export function EnclaveOrb({ className, live = true }: { className?: string; live?: boolean }) {
-  return (
-    <div className={cn("relative isolate size-44", className)} aria-hidden="true">
-      {/* Halo */}
-      <div className="spin-slow absolute -inset-6 -z-10 rounded-full bg-[conic-gradient(from_0deg,rgb(2_151_222/0.0),rgb(2_151_222/0.55),rgb(252_115_77/0.0),rgb(252_115_77/0.6),rgb(2_151_222/0.0))] opacity-70 blur-2xl" />
-      <div className="absolute -inset-1 -z-10 rounded-full bg-[radial-gradient(circle,rgb(2_151_222/0.35),transparent_70%)] blur-md" />
-      {/* Sphere */}
-      <div className="relative size-full overflow-hidden rounded-full bg-night shadow-[0_0_0_1px_rgb(234_243_249/0.12),0_30px_80px_-20px_rgb(2_151_222/0.6)]">
-        {live ? <FlutedGlass rib={12} focus={0} /> : <div className="aurora" />}
-        {/* Curvature: dark rim, bright upper-left glint */}
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,transparent_45%,rgb(2_7_10/0.75)_100%)]" />
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_32%_24%,rgb(255_255_255/0.45),rgb(255_255_255/0)_28%)]" />
-        <div className="absolute inset-0 rounded-full shadow-[inset_0_2px_6px_rgb(255_255_255/0.25),inset_0_-10px_30px_rgb(2_7_10/0.7)]" />
-      </div>
-    </div>
-  );
+function paintFrame(ctx: CanvasRenderingContext2D, frame: OrbFrame, design: number, t: number) {
+  const drift = 0.14 * Math.sin(t * 0.5);
+  for (const d of frame.dots) {
+    const near = 1 - d.white;
+    const side = clamp(0.5 + (d.x / design - 0.5) * 1.5 + drift);
+    const base = side < 0.5 ? mix(LIT, BLUE, side * 2) : mix(BLUE, ORCHID, Math.pow((side - 0.5) * 2, 0.75));
+    const lit = mix(base, side > 0.6 ? PETAL : LIT, near * near * 0.42);
+    const k = 0.5 + 0.5 * Math.sqrt(near);
+    ctx.globalAlpha = d.a ?? 1;
+    ctx.fillStyle = `rgb(${(lit[0] * k) | 0},${(lit[1] * k) | 0},${(lit[2] * k) | 0})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
-/** A small static orb for message avatars (no WebGL per message). */
+/** The orb. Live ones pause off screen; the rest draw a single frame. */
+export function DotOrb({ size, live = true, className }: { size: number; live?: boolean; className?: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    // The package ships two tuned designs, so draw the nearest one and scale it
+    const design = size < 32 ? 20 : 64;
+    const { mode, speed, opts } = resolvePreset("composing", design);
+    const scale = Math.max(devicePixelRatio || 1, 2);
+    canvas.width = canvas.height = Math.round(size * scale);
+
+    const draw = (t: number) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform((size * scale) / design, 0, 0, (size * scale) / design, 0, 0);
+      paintFrame(ctx, MODE_FRAMES[mode](design, t, opts), design, t);
+    };
+
+    if (!live || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      draw(REST_TIME);
+      return;
+    }
+
+    let raf = 0;
+    let running = false;
+    const loop = () => {
+      draw((performance.now() / 1000) * speed);
+      if (running) raf = requestAnimationFrame(loop);
+    };
+    const start = () => {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(loop);
+    };
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+
+    draw((performance.now() / 1000) * speed);
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()));
+    io.observe(canvas);
+    return () => {
+      stop();
+      io.disconnect();
+    };
+  }, [size, live]);
+
+  return <canvas ref={ref} className={cn("block shrink-0", className)} style={{ width: size, height: size }} aria-hidden="true" />;
+}
+
+/** The large orb on the empty chat screen. */
+export function EnclaveOrb({ className, live = true }: { className?: string; live?: boolean }) {
+  return <DotOrb size={92} live={live} className={className} />;
+}
+
+/** The small still orb beside each answer. */
 export function OrbMark({ className }: { className?: string }) {
-  return (
-    <div
-      className={cn(
-        "relative size-8 shrink-0 overflow-hidden rounded-full bg-[conic-gradient(from_200deg_at_50%_50%,#0297de,#5cc4ff,#02070a,#fc734d,#0297de)] shadow-[0_0_0_1px_rgb(234_243_249/0.15),0_6px_20px_-6px_rgb(2_151_222/0.7)]",
-        className,
-      )}
-      aria-hidden="true"
-    >
-      <div className="absolute inset-[3px] rounded-full bg-[repeating-linear-gradient(90deg,rgb(2_7_10/0.35)_0_2px,transparent_2px_4px)]" />
-      <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_25%,rgb(255_255_255/0.6),transparent_35%)]" />
-    </div>
-  );
+  return <DotOrb size={22} live={false} className={className} />;
 }

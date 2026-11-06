@@ -2,10 +2,10 @@
 @import "tailwindcss";
 
 /*
-  Enigma. Midnight black, electric blue light, one cantaloupe accent.
+  Enigma. Black, white light and one orchid accent taken from the wave.
 
   Blue is the light the page is lit by, and the colour of anything sealed or verified.
-  Cantaloupe is the one accent: the action to take, a fuse running out, a destroyed result.
+  orchid is the one accent: the action to take, a fuse running out, a destroyed result.
   The engraved patterns (guilloche, security tint, stamps) come from security printing.
 */
 :root {
@@ -18,9 +18,9 @@
 
   --volt: #0297de; /* Electric Blue */
   --volt-lit: #5cc4ff;
-  --melon: #fc734d; /* Cantaloupe Orange */
-  --melon-lit: #ff9a7c;
-  --burn: #fc734d;
+  --orchid: #e59cf4; /* Orchid, from the wave */
+  --orchid-lit: #f2c8f8;
+  --burn: #e59cf4;
 
   --paper: #eef3f7;
   --sheet: #f8fbfd;
@@ -30,7 +30,7 @@
 
   --background: var(--night);
   --foreground: var(--frost);
-  --primary: var(--melon);
+  --primary: var(--frost);
   --primary-foreground: var(--night);
   --border: var(--night-line);
   --ring: var(--volt);
@@ -45,8 +45,8 @@
   --color-frost-soft: var(--frost-soft);
   --color-volt: var(--volt);
   --color-volt-lit: var(--volt-lit);
-  --color-melon: var(--melon);
-  --color-melon-lit: var(--melon-lit);
+  --color-orchid: var(--orchid);
+  --color-orchid-lit: var(--orchid-lit);
   --color-burn: var(--burn);
   --color-paper: var(--paper);
   --color-sheet: var(--sheet);
@@ -64,7 +64,6 @@
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
-  --radius-control: 6px;
 }
 
 html {
@@ -84,9 +83,12 @@ body {
   color: var(--night);
 }
 
-:focus-visible {
-  outline: 2px solid var(--volt-lit);
-  outline-offset: 3px;
+/* In a layer, so a utility like focus:outline-none can still turn it off */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--volt-lit);
+    outline-offset: 3px;
+  }
 }
 
 .display {
@@ -99,66 +101,6 @@ body {
 }
 .num {
   font-variant-numeric: tabular-nums;
-}
-
-/* Electric blue light falling onto a cantaloupe horizon */
-.aurora {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse 55% 42% at 50% 104%, rgb(252 115 77 / 0.95) 0%, rgb(252 115 77 / 0.55) 32%, rgb(252 115 77 / 0) 70%),
-    radial-gradient(ellipse 40% 85% at 50% 78%, rgb(2 151 222 / 0.55) 0%, rgb(2 151 222 / 0.18) 45%, rgb(2 151 222 / 0) 75%),
-    radial-gradient(ellipse 90% 60% at 50% 0%, rgb(2 151 222 / 0.12), rgb(2 7 10 / 0) 70%),
-    var(--night);
-}
-.aurora::before {
-  /* the rays */
-  content: "";
-  position: absolute;
-  inset: -10% -20%;
-  background: repeating-linear-gradient(
-    90deg,
-    rgb(92 196 255 / 0) 0 18px,
-    rgb(92 196 255 / 0.22) 19px 20px,
-    rgb(92 196 255 / 0) 21px 46px,
-    rgb(92 196 255 / 0.1) 47px 50px,
-    rgb(92 196 255 / 0) 51px 83px
-  );
-  mask-image: radial-gradient(ellipse 38% 90% at 50% 75%, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 75%);
-  animation: rays 18s linear infinite;
-  filter: blur(0.6px);
-}
-.aurora::after {
-  /* a slow breathing glow on the horizon */
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -18%;
-  width: 70%;
-  height: 45%;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgb(255 154 124 / 0.55), rgb(252 115 77 / 0) 65%);
-  animation: horizon 7s ease-in-out infinite;
-}
-@keyframes rays {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(83px);
-  }
-}
-@keyframes horizon {
-  0%,
-  100% {
-    opacity: 0.75;
-    transform: translateX(-50%) scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: translateX(-50%) scale(1.06);
-  }
 }
 
 /* Film grain, so the gradients read as light rather than flat fills */
@@ -208,17 +150,17 @@ body {
 
 /* ---------------------------------------------------------------- chat */
 
-/* A border lit from inside: electric blue into cantaloupe */
+/* A border lit from inside: electric blue into orchid */
 .lit-border {
   border: 1px solid transparent;
   background:
     linear-gradient(var(--night-2), var(--night-2)) padding-box,
-    linear-gradient(115deg, rgb(92 196 255 / 0.55), rgb(234 243 249 / 0.08) 38%, rgb(234 243 249 / 0.06) 62%, rgb(252 115 77 / 0.55)) border-box;
+    linear-gradient(115deg, rgb(92 196 255 / 0.55), rgb(234 243 249 / 0.08) 38%, rgb(234 243 249 / 0.06) 62%, rgb(229 156 244 / 0.55)) border-box;
 }
 .lit-border:focus-within {
   background:
     linear-gradient(var(--night-2), var(--night-2)) padding-box,
-    linear-gradient(115deg, rgb(92 196 255 / 0.95), rgb(2 151 222 / 0.25) 40%, rgb(252 115 77 / 0.25) 60%, rgb(252 115 77 / 0.95)) border-box;
+    linear-gradient(115deg, rgb(92 196 255 / 0.95), rgb(2 151 222 / 0.25) 40%, rgb(229 156 244 / 0.25) 60%, rgb(229 156 244 / 0.95)) border-box;
 }
 
 /* Glass surface: a faint fill with a highlight along the top edge */
@@ -306,21 +248,26 @@ body {
 .section {
   padding-block: clamp(80px, 9vw, 128px);
   background: #000;
-  /* The sections run on pure black and neutral greys, with orange as the only accent */
+}
+/* Pure black and neutral greys, with orchid as the only accent */
+.section,
+.mono-theme {
   --night: #000;
   --night-2: #0c0c0c;
   --night-3: #161616;
+  --night-line: rgb(255 255 255 / 0.12);
   --frost: #eeeeee;
   --frost-soft: #9a9a9a;
-  --volt: #fc734d;
-  --volt-lit: #ff9a7c;
+  --volt: #e59cf4;
+  --volt-lit: #f2c8f8;
   --color-night: #000;
   --color-night-2: #0c0c0c;
   --color-night-3: #161616;
+  --color-night-line: rgb(255 255 255 / 0.12);
   --color-frost: #eeeeee;
   --color-frost-soft: #9a9a9a;
-  --color-volt: #fc734d;
-  --color-volt-lit: #ff9a7c;
+  --color-volt: #e59cf4;
+  --color-volt-lit: #f2c8f8;
 }
 .heading {
   font-size: clamp(2.4rem, 5vw, 4.25rem);
@@ -342,7 +289,7 @@ body {
   margin-bottom: 16px;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  color: var(--volt-lit);
+  color: var(--frost-soft);
 }
 .panel {
   border-radius: 14px;
@@ -354,10 +301,10 @@ body {
   background-size: 22px 22px;
 }
 .spark {
-  filter: drop-shadow(0 0 6px rgb(252 115 77));
+  filter: drop-shadow(0 0 6px rgb(229 156 244));
 }
 .chip-glow {
-  filter: drop-shadow(0 0 22px rgb(252 115 77 / 0.75));
+  filter: drop-shadow(0 0 22px rgb(229 156 244 / 0.75));
   animation: chip-glow 2.4s ease-in-out infinite;
 }
 @keyframes chip-glow {
@@ -446,6 +393,46 @@ body {
 .ticket {
   -webkit-mask: radial-gradient(6px at 50% 100%, transparent 98%, #000) 0 100% / 18px 100% repeat-x;
   mask: radial-gradient(6px at 50% 100%, transparent 98%, #000) 0 100% / 18px 100% repeat-x;
+}
+
+/* ---------------------------------------------------------------- app */
+/* The app: neutral charcoal with a clean grotesk, floating over the wave */
+.app-theme {
+  --night: #1c1c1c;
+  --night-2: #242424;
+  --night-3: #2e2e2e;
+  --night-line: rgb(255 255 255 / 0.1);
+  --frost: #f5f5f5;
+  --frost-soft: #a8a8a8;
+  --color-night: #1c1c1c;
+  --color-night-2: #242424;
+  --color-night-3: #2e2e2e;
+  --color-night-line: rgb(255 255 255 / 0.1);
+  --color-frost: #f5f5f5;
+  --color-frost-soft: #a8a8a8;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+.app-theme .display {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.app-theme * {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+.live-dot {
+  animation: live-dot 1.6s ease-in-out infinite;
+}
+@keyframes live-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
 }
 
 /* ---------------------------------------------------------------- glass nav */
@@ -614,21 +601,13 @@ body {
 
 /* ---- Cinematic hero: the wordmark far off at the vanishing point ---- */
 .enigma-title {
-  font-family: var(--font-title), "Trajan Pro", "Optima", serif;
+  /* The same face as the Enigma in the nav */
   font-weight: 600;
-  font-size: clamp(24px, 5.2svh, 66px);
+  font-size: clamp(34px, 8svh, 92px);
   line-height: 1;
-  letter-spacing: 0.13em;
-  padding-left: 0.13em; /* balances the trailing letter-space so it centres on the apex */
-  color: #fffaf0;
-  text-shadow:
-    0 0 4px rgb(255 248 230 / 1),
-    0 0 14px rgb(255 224 165 / 0.9),
-    0 0 40px rgb(255 178 90 / 0.62),
-    0 0 100px rgb(255 150 60 / 0.4);
-  animation:
-    title-in 3.4s cubic-bezier(0.16, 1, 0.3, 1) 0.9s both,
-    title-breathe 6s ease-in-out 4.3s infinite;
+  letter-spacing: -0.02em;
+  color: #fff;
+  animation: title-in 3.4s cubic-bezier(0.16, 1, 0.3, 1) 0.9s both;
 }
 /* Only opacity, blur and scale animate, so the layout the shader measures never moves */
 @keyframes title-in {
@@ -641,15 +620,6 @@ body {
     opacity: 1;
     filter: blur(0);
     transform: scale(1);
-  }
-}
-@keyframes title-breathe {
-  50% {
-    text-shadow:
-      0 0 5px rgb(255 250 235 / 1),
-      0 0 18px rgb(255 228 172 / 0.95),
-      0 0 52px rgb(255 182 96 / 0.7),
-      0 0 120px rgb(255 150 60 / 0.48);
   }
 }
 .enigma-tick {

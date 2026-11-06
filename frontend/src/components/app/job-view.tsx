@@ -31,7 +31,7 @@ export function JobView({ id }: { id: string }) {
     <div className="grid min-h-full grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <main className="min-w-0 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
         <Header vm={vm} />
-        {error && <p className="mt-4 font-mono text-[12px] text-melon">Last refresh failed: {error.message}</p>}
+        {error && <p className="mt-4 font-mono text-[12px] text-orchid">Last refresh failed: {error.message}</p>}
         <AnswerCard vm={vm} now={now} />
         <Trail vm={vm} />
       </main>
@@ -49,7 +49,7 @@ function Header({ vm }: { vm: JobVM }) {
           <TaskChip task={vm.task} className="text-frost-soft" />
           {vm.ttl > 0 && <span>lifespan {ttlLabel(vm.ttl)}</span>}
           {vm.preview && (
-            <span className="rounded-full border border-melon/50 px-2 py-px text-melon" title="Simulated in this browser because the server isn't configured">
+            <span className="rounded-full border border-orchid/50 px-2 py-px text-orchid" title="Simulated in this browser because the server isn't configured">
               simulated
             </span>
           )}
@@ -70,7 +70,7 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
   if (vm.phase === "working")
     return (
       <section className="relative mt-8 h-72 overflow-hidden rounded-[16px] border border-night-line bg-night-2">
-        <Guilloche variant="rosette" cx={0.5} cy={0.5} size={0.5} color="rgba(92,196,255,0.14)" accent="rgba(252,115,77,0.45)" />
+        <Guilloche variant="rosette" cx={0.5} cy={0.5} size={0.5} color="rgba(92,196,255,0.14)" accent="rgba(229,156,244,0.45)" />
         <div className="absolute inset-0 grid place-items-center text-center">
           <div className="rounded-[12px] bg-night-2/90 px-5 py-3">
             <p className="text-[19px] font-semibold">Inside the enclave</p>
@@ -125,7 +125,7 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
           <p
             className={cn(
               "display num mt-1 text-[clamp(2.6rem,6.5vw,5.2rem)] leading-[0.85] tracking-[-0.03em]",
-              gone ? "text-frost/30" : late ? "text-melon" : "text-frost",
+              gone ? "text-frost/30" : late ? "text-orchid" : "text-frost",
             )}
           >
             {gone
@@ -169,16 +169,18 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
         )}
 
         {gone && (
-          <div className="relative min-h-44">
+          <div>
             <p className="text-[13px] text-frost-soft">What&rsquo;s left of the answer</p>
-            <p className="mt-2 font-mono text-[12px] leading-relaxed break-all text-frost/30 sm:pr-64">
+            <p className="mt-2 font-mono text-[12px] leading-relaxed break-all text-frost/30">
               {vm.ciphertextPreview ?? "The Arkiv entity has expired, so even the ciphertext is gone."}
             </p>
             <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-frost-soft">
               Your browser wiped the only key that could open this. Nobody can read the answer again, including Enigma.
             </p>
-            {!vm.preview && <DecryptCheck id={vm.id} />}
-            <Stamp className="mt-6 inline-block sm:absolute sm:-top-3 sm:right-2 sm:mt-0" sub="KEY WIPED" />
+            <div className="mt-5 flex flex-wrap items-end justify-between gap-5">
+              {!vm.preview && <DecryptCheck id={vm.id} />}
+              <Stamp className="ml-auto" sub="KEY WIPED" />
+            </div>
           </div>
         )}
       </div>
@@ -215,16 +217,10 @@ function Trail({ vm }: { vm: JobVM }) {
         {rows.map((r, i) => (
           <li key={r.what} className={cn("flex items-center gap-4 px-4 py-3 text-[14px]", i > 0 && "border-t border-night-line", (r.state === "todo" || r.state === "skipped") && "opacity-50")}>
             <Check state={r.state === "active" && i > 0 && rows[i - 1].state !== "done" ? "todo" : r.state} />
-            <span className="min-w-0 flex-1 truncate">{r.what}</span>
+            <span className="min-w-0 flex-1">{r.what}</span>
             <span className="hidden font-mono text-[11px] text-frost-soft sm:inline">{r.where}</span>
             {r.value ? (
-              <button
-                onClick={() => navigator.clipboard?.writeText(r.value ?? "")}
-                title="Copy"
-                className="w-28 shrink-0 truncate text-right font-mono text-[11px] text-frost/70 hover:text-volt-lit sm:w-36"
-              >
-                {short(r.value, 8, 6)}
-              </button>
+              <CopyValue value={r.value} />
             ) : (
               <span className="w-28 shrink-0 sm:w-36" />
             )}
@@ -265,12 +261,12 @@ function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | n
         <div className="border-[1.5px] border-night p-0.5">
           <div className="relative border border-night/30">
             <div className="relative h-9 overflow-hidden border-b border-night/20">
-              <Guilloche variant="band" color="rgba(2,151,222,0.32)" accent="rgba(252,115,77,0.65)" animate={!gone} />
+              <Guilloche variant="band" color="rgba(2,151,222,0.32)" accent="rgba(229,156,244,0.65)" animate={!gone} />
             </div>
             <div className="px-4 py-5">
               <div className="flex items-start justify-between font-mono text-[9.5px] text-ink-soft">
                 <span>Whitechain testnet, 1874</span>
-                <span className="text-[11px] text-melon">No. {vm.preview ? "preview" : vm.id}</span>
+                <span className="text-[11px] text-orchid">No. {vm.preview ? "preview" : vm.id}</span>
               </div>
               <p className="display narrow mt-4 text-center text-[1.35rem] leading-none tracking-[0.01em] uppercase">
                 {gone ? "Certificate of destruction" : "Receipt pending"}
@@ -316,7 +312,7 @@ function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | n
 function DecryptCheck({ id }: { id: string }) {
   const [state, setState] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({ busy: false, msg: null, ok: false });
   return (
-    <div className="mt-5">
+    <div>
       <button
         onClick={async () => {
           setState({ busy: true, msg: null, ok: false });
@@ -324,11 +320,29 @@ function DecryptCheck({ id }: { id: string }) {
           setState({ busy: false, ok: r.ok, msg: r.ok ? "Decrypted. The key is still in this browser." : `Decryption failed: ${r.reason}` });
         }}
         disabled={state.busy}
-        className="rounded-md border border-frost/15 px-3 py-1.5 text-[13px] text-frost/80 transition-colors hover:border-frost/30 hover:text-frost disabled:opacity-50"
+        className="rounded-full border border-frost/15 px-4 py-1.5 text-[13px] text-frost/80 transition-colors hover:border-frost/30 hover:text-frost disabled:opacity-50"
       >
         {state.busy ? "Trying…" : "Try to decrypt it now"}
       </button>
-      {state.msg && <p className={cn("mt-2 font-mono text-[12px]", state.ok ? "text-volt-lit" : "text-melon")}>{state.msg}</p>}
+      {state.msg && <p className={cn("mt-2 font-mono text-[12px]", state.ok ? "text-volt-lit" : "text-orchid")}>{state.msg}</p>}
     </div>
+  );
+}
+
+function CopyValue({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() =>
+        navigator.clipboard?.writeText(value).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1400);
+        })
+      }
+      title="Copy"
+      className="w-28 shrink-0 truncate text-right font-mono text-[11px] text-frost/70 hover:text-volt-lit sm:w-36"
+    >
+      {copied ? "Copied" : short(value, 8, 6)}
+    </button>
   );
 }

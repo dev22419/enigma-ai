@@ -20,7 +20,7 @@ export function Logo({ className }: { className?: string }) {
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" className="shrink-0">
         <circle cx="11" cy="11" r="9.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
         <circle cx="11" cy="11" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.2 1.8" />
-        <circle cx="11" cy="11" r="2" fill="var(--melon)" />
+        <circle cx="11" cy="11" r="2" fill="var(--orchid)" />
       </svg>
       <span className="text-[17px] font-semibold tracking-[-0.01em]">Enigma</span>
     </span>

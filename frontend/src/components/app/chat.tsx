@@ -4,15 +4,17 @@
 import { ArrowUp, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { useSignMessage } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
+import { withImageNote } from "@/lib/image-note";
 import { cn } from "@/lib/utils";
-import { EnclaveOrb, OrbMark } from "./orb";
-import { ConnectPill, useGate, type Gate } from "./wallet";
+import { DotOrb, OrbMark } from "./orb";
+import { useFullWave } from "./wave";
+import { ConnectPill, useGate, walletProblem, type Gate } from "./wallet";
 import {
   ApiError,
   TTL_OPTIONS,
@@ -49,7 +51,8 @@ const MAX_CHARS = 8_000_000;
 const TEXT_EXT = /\.(txt|md|csv|json|log|xml|html?)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
-type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number };
+// `src` is only for showing the image in this tab. It is never sent.
+type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number; src?: string };
 type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
 type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null; jobId?: string };
 type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
@@ -109,6 +112,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
   );
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
+  useFullWave(empty);
   // Real jobs are paid from the connected wallet's balance, by its signature. Previews and demo mode skip this.
   const { gate, credit } = useGate(threadPreview);
   const { signMessageAsync } = useSignMessage();
@@ -213,7 +217,8 @@ export function Chat({ samples }: { samples: Sample[] }) {
       setSent((s) => ({ ...s, [res.jobId]: out }));
       setPending((p) => p.filter((x) => x.key !== key));
     } catch (e) {
-      const err = e instanceof ApiError ? e : new ApiError("Something went wrong sending this message.", 0);
+      const said = walletProblem(e instanceof Error ? e.message : "");
+      const err = e instanceof ApiError ? e : new ApiError(said ?? "Something went wrong sending this message.", 0);
       setPending((p) => p.map((x) => (x.key === key ? { ...x, error: err } : x)));
     }
   }
@@ -246,46 +251,42 @@ export function Chat({ samples }: { samples: Sample[] }) {
   );
 
   return (
-    <div className="flex min-h-dvh flex-col lg:h-dvh">
-      <header className="flex h-14 shrink-0 items-center gap-3 px-5 sm:px-8">
-        <p className="min-w-0 truncate text-[13.5px] text-frost/60">{jobs[0]?.fileName ?? pending[0]?.out.label ?? ""}</p>
-        {threadPreview && (
-          <span className="shrink-0 text-[12px] text-melon" title="The server isn't configured, so answers are simulated in this browser">
-            Preview
-          </span>
-        )}
-        <span className="ml-auto flex shrink-0 items-center gap-2 text-[12px] text-frost-soft/70 max-sm:hidden">
-          <span className={cn("size-1.5 rounded-full", directTeeStatus === "ready" ? "bg-[#3DDC97] shadow-[0_0_8px_#3DDC97]" : "bg-volt-lit shadow-[0_0_8px_#5cc4ff]")} />
-          {directTeeStatus === "ready"
-            ? `direct TEE, ${directTee?.provider.model ?? "0gm"}`
-            : `0gm-1.0-35b-a3b, sealed enclave`}
-          {SERVICE_PAID ? ", demo mode" : ""}
-        </span>
-      </header>
+    <div className="flex h-full flex-col">
+      {!empty && (
+        <header className="flex h-12 shrink-0 items-center gap-3 px-5 sm:px-8">
+          <p className="min-w-0 truncate text-[14px] text-frost/70">{jobs[0]?.fileName ?? pending[0]?.out.label ?? ""}</p>
+          {threadPreview && (
+            <span className="shrink-0 text-[12px] text-orchid" title="The server isn't configured, so answers are simulated in this browser">
+              Preview
+            </span>
+          )}
+          <span className="ml-auto shrink-0 text-[12.5px] text-frost-soft max-sm:hidden">Sealed enclave{SERVICE_PAID ? ", demo mode" : ""}</span>
+        </header>
+      )}
 
       {empty ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-5 pb-24 sm:px-8">
-          <div className="rise w-full max-w-[640px]">
-            <EnclaveOrb className="size-14 [&>div:first-child]:-inset-3 [&>div:first-child]:blur-xl" />
-            <h1 className="mt-8 text-[28px] leading-tight font-semibold tracking-[-0.02em]">Private by default.</h1>
-            <p className="mt-2 text-[15px] leading-relaxed text-frost/55">
-              Add a document. It&rsquo;s read inside a sealed enclave, and the answer becomes unreadable when its timer ends.
+        <div className="flex min-h-full flex-1 flex-col px-5 sm:px-8">
+          <div className="rise mx-auto flex w-full max-w-[640px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
+            <p className="inline-flex items-center gap-2 rounded-full bg-black/25 py-1 pr-3 pl-1 text-[13px] text-frost/90 backdrop-blur-sm">
+              <span className="rounded-full bg-[#4775e7] px-2 py-0.5 text-[12px] font-medium text-white">Private</span>
+              Encrypted before it leaves your browser
             </p>
-            <div className="mt-8">{composer}</div>
-            {samples.length > 0 && (
-              <p className="mt-5 text-[13px] leading-loose text-frost-soft/70">
-                Try a fictional sample:{" "}
-                {samples.map((s, i) => (
-                  <span key={s.key}>
-                    <button onClick={() => pickSample(s)} className="text-frost/80 underline decoration-frost/20 underline-offset-4 transition-colors hover:text-frost hover:decoration-volt-lit">
-                      {s.label.toLowerCase()}
-                    </button>
-                    {i < samples.length - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </p>
-            )}
+            <h1 className="mt-4 text-[clamp(1.75rem,3.2vw,2.5rem)] leading-tight font-semibold tracking-[-0.03em]">What should Enigma read?</h1>
+            <div className="mt-6 w-full text-left">{composer}</div>
           </div>
+          {samples.length > 0 && (
+            <section className="mx-auto w-full max-w-[920px] rounded-t-[16px] bg-[#1a100f]/90 p-4 pb-5 backdrop-blur-md">
+              <h2 className="text-[14px] font-medium">Try a fictional sample</h2>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {samples.map((s) => (
+                  <button key={s.key} onClick={() => pickSample(s)} className="flex flex-col items-start rounded-xl bg-frost/[0.06] p-3 text-left transition-colors hover:bg-frost/[0.11]">
+                    <span className="block text-[14px] font-medium">{s.label}</span>
+                    <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-frost-soft">{s.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       ) : (
         <>
@@ -300,7 +301,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
               <div ref={bottom} />
             </div>
           </div>
-          <div className="shrink-0 bg-[linear-gradient(180deg,rgb(2_7_10/0),var(--night)_35%)] px-5 pt-4 pb-5 sm:px-8">
+          <div className="shrink-0 px-5 pt-3 pb-5 sm:px-8">
             <div className="mx-auto max-w-[680px]">{composer}</div>
           </div>
         </>
@@ -313,9 +314,9 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
   return (
-    <label className="relative flex items-center gap-1 rounded-md px-2 py-1 text-[13px] text-frost/60 transition-colors hover:bg-frost/[0.05] hover:text-frost">
+    <label className="relative flex min-w-0 items-center gap-1 rounded-full py-1 pr-1 pl-1.5 text-[12.5px] sm:pr-2 sm:pl-2.5 sm:text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
       <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="cursor-pointer appearance-none bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
         {children}
       </select>
       <ChevronDown className="pointer-events-none absolute right-1.5 size-3.5 opacity-60" />
@@ -343,6 +344,7 @@ function Composer({
   areaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const [err, setErr] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const { text, att, task, ttl } = draft;
 
@@ -361,12 +363,17 @@ function Composer({
       let next: Attachment;
       if (IMAGE_EXT.test(f.name)) {
         // The API wants the image as raw base64 (it builds the data URL itself), not a full data URL.
-        const content = (await readAsDataUrl(f)).replace(/^data:[^,]*,/, "");
+        const src = await readAsDataUrl(f);
+        const content = src.replace(/^data:[^,]*,/, "");
         if (content.length > MAX_CHARS) throw new Error("big");
-        next = { name: f.name, content, kind: "image", bytes: f.size };
+        next = { name: f.name, content, kind: "image", bytes: f.size, src };
       } else if (TEXT_EXT.test(f.name) || f.type.startsWith("text/")) {
         const content = await f.text();
         if (content.length > MAX_CHARS) throw new Error("big");
+        if (!content.trim()) {
+          setErr("That file is empty.");
+          return;
+        }
         next = { name: f.name, content, kind: "text", bytes: f.size };
       } else {
         setErr("Only text files and images for now. For a PDF, paste its text instead.");
@@ -374,7 +381,7 @@ function Composer({
       }
       setDraft((d) => ({ ...d, att: next }));
     } catch (e) {
-      setErr(e instanceof Error && e.message === "big" ? "That file is over the 8 MB limit." : "That file couldn't be read.");
+      setErr(e instanceof Error && e.message === "big" ? "That file is too large. The limit is 6 MB for images and 8 MB for text." : "That file couldn't be read.");
     }
   }
 
@@ -385,7 +392,7 @@ function Composer({
     const typed = text.trim();
     let out: Outgoing;
     if (att?.kind === "image") {
-      out = { label: att.name, content: att.content, fileName: att.name, task, ttl, text: typed, attachment: att };
+      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, task, ttl, text: typed, attachment: att };
     } else if (att) {
       // The model treats everything as document content, so notes travel with the document, clearly marked.
       const content = typed ? `${att.content}\n\nNOTES FROM THE SENDER\n${typed}` : att.content;
@@ -394,6 +401,13 @@ function Composer({
       out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", task, ttl, text: typed, attachment: null };
     }
     onSend(out);
+  }
+
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = e.clipboardData.files?.[0];
+    if (!pasted) return;
+    e.preventDefault();
+    attach(pasted);
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -406,19 +420,36 @@ function Composer({
   return (
     <div>
       <div
-        className="rounded-[18px] border border-frost/[0.12] bg-night-2/80 transition-[border-color,box-shadow] focus-within:border-frost/25 focus-within:shadow-[0_0_0_4px_rgb(2_151_222/0.08)]"
-        onDragOver={(e) => e.preventDefault()}
+        className={cn(
+          "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
+          dragging && "shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1.5px_rgb(255_255_255/0.5)]",
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          setDragging(false);
           attach(e.dataTransfer.files?.[0]);
         }}
       >
         {att && (
           <div className="flex items-center gap-2.5 px-4 pt-3.5 text-[13px]">
-            {att.kind === "image" ? <ImageIcon className="size-4 text-volt-lit" /> : <FileText className="size-4 text-volt-lit" />}
+            {att.src ? <Thumb src={att.src} className="size-11" /> : <FileText className="size-4 text-volt-lit" />}
             <span className="min-w-0 truncate text-frost/90">{att.name}</span>
             <span className="shrink-0 text-frost-soft/70">{kb(att.bytes)}</span>
-            <button onClick={() => setDraft((d) => ({ ...d, att: null }))} aria-label="Remove attachment" className="ml-auto grid size-6 place-items-center rounded-md text-frost-soft hover:bg-frost/10 hover:text-frost">
+            <button
+              onClick={() => {
+                setErr(null);
+                setDraft((d) => ({ ...d, att: null }));
+              }}
+              aria-label="Remove attachment"
+              className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-frost-soft hover:bg-frost/10 hover:text-frost"
+            >
               <X className="size-3.5" />
             </button>
           </div>
@@ -433,14 +464,14 @@ function Composer({
           value={text}
           onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
           onKeyDown={onKey}
-          disabled={att?.kind === "image"}
-          placeholder={att?.kind === "image" ? "The image is sent on its own." : att ? "Add a note (optional)" : "Paste a document or attach one"}
-          className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none disabled:opacity-50"
+          onPaste={onPaste}
+          placeholder={att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste a document or attach one"}
+          className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
         />
-        <div className="flex items-center gap-0.5 px-2 pb-2">
+        <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
           <button
             onClick={() => file.current?.click()}
-            className="grid size-8 place-items-center rounded-md text-frost/50 transition-colors hover:bg-frost/[0.05] hover:text-frost"
+            className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
             aria-label="Attach a text file or image"
             title="Attach a text file or image"
           >
@@ -460,7 +491,7 @@ function Composer({
               </option>
             ))}
           </QuietSelect>
-          {gate.kind === "ok" && gate.price && <span className="num ml-auto mr-2 text-[12px] text-frost-soft/60">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
+          {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
           {gate.kind === "connect" ? (
             <ConnectPill className="ml-auto" />
           ) : (
@@ -468,9 +499,10 @@ function Composer({
               onClick={submit}
               disabled={!canSend}
               aria-label="Send"
+              title={busy ? "Enigma is still working on your last message" : undefined}
               className={cn(
-                "grid size-8 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-melon disabled:bg-frost/15 disabled:text-frost/40",
-                !(gate.kind === "ok" && gate.price) && "ml-auto",
+                "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
+                gate.kind === "ok" && gate.price ? "max-sm:ml-auto" : "ml-auto",
               )}
             >
               <ArrowUp className="size-4" strokeWidth={2.4} />
@@ -481,28 +513,33 @@ function Composer({
           ref={file}
           type="file"
           className="sr-only"
-          accept=".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,text/*,image/*"
+          accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,text/*"
           onChange={(e) => {
             attach(e.target.files?.[0]);
             e.target.value = "";
           }}
         />
       </div>
+      {gate.kind === "ok" && gate.price && (
+        <p className="num mt-2 px-1 text-[12px] text-frost-soft/60 sm:hidden">
+          {gate.price} USDT{left !== null ? `, ${left} left` : ""}
+        </p>
+      )}
       {err && (
-        <p role="alert" className="mt-2 px-1 text-[13px] text-melon">
+        <p role="alert" className="mt-2 px-1 text-[13px] text-orchid">
           {err}
         </p>
       )}
       {gate.kind === "credit" && (
-        <p className="mt-2 px-1 text-[13px] text-melon">
+        <p className="mt-2 px-1 text-[13px] text-orchid">
           Your credit is {Number(gate.balance).toFixed(2)} USDT and a message costs {gate.price}.{" "}
-          <Link href="/dashboard" className="underline decoration-melon/40 underline-offset-4">
+          <Link href="/dashboard" className="underline decoration-orchid/40 underline-offset-4">
             Add credit
           </Link>
         </p>
       )}
       {gate.kind === "checking" && <p className="mt-2 px-1 text-[13px] text-frost-soft/70">Checking your credit…</p>}
-      {gate.kind === "error" && <p className="mt-2 px-1 text-[13px] text-melon">Couldn&rsquo;t read your credit: {gate.message}</p>}
+      {gate.kind === "error" && <p className="mt-2 px-1 text-[13px] text-orchid">Couldn&rsquo;t read your credit: {gate.message}</p>}
       {gate.kind === "connect" && roomy && <p className="mt-2 px-1 text-[13px] text-frost-soft/70">Connect a wallet to send. Each message is paid from your prepaid USDT balance.</p>}
     </div>
   );
@@ -510,12 +547,26 @@ function Composer({
 
 /* ================================================================== messages */
 
+/** Upstream errors carry raw provider JSON. Say what happened instead. */
+export function plainError(message: string) {
+  if (/0G inference failed|no provider|upstream/i.test(message)) return "0G's sealed model didn't respond. Try again in a minute.";
+  if (/attestation|no request id|empty result/i.test(message)) return "0G's answer couldn't be verified, so it wasn't used.";
+  return message.split(/[{[]/)[0].trim() || "The server couldn't finish this message.";
+}
+
+function Thumb({ src, className }: { src: string; className?: string }) {
+  // A data URL held in this tab, so next/image has nothing to optimise
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" className={cn("shrink-0 rounded-lg object-cover", className)} />;
+}
+
 function UserMessage({ label, out, ttl, task }: { label: string; out?: Outgoing; ttl: number; task: Task | null }) {
   const typed = out?.text ?? "";
   const doc = out?.attachment;
   return (
     <div className="rise flex flex-col items-end">
       <div className="max-w-[85%] rounded-[16px] bg-frost/[0.06] px-4 py-3">
+        {doc?.src && <Thumb src={doc.src} className="mb-2.5 max-h-56 w-full max-w-72" />}
         {(doc || !out) && (
           <p className="flex items-center gap-2 text-[14px] text-frost/90">
             {doc?.kind === "image" ? <ImageIcon className="size-4 shrink-0 text-volt-lit" /> : <FileText className="size-4 shrink-0 text-volt-lit" />}
@@ -554,7 +605,7 @@ function Reply({ id }: { id: string }) {
   if (loading || !vm)
     return (
       <div className="flex items-center gap-3">
-        <OrbMark className="size-5" />
+        <OrbMark />
         <p className="text-[13.5px] text-frost-soft">{error ? `Couldn't load job ${id}: ${error.message}` : "Loading…"}</p>
       </div>
     );
@@ -567,7 +618,7 @@ function Reply({ id }: { id: string }) {
   return (
     <div className="rise">
       <div className="mb-3 flex items-center gap-2.5">
-        <OrbMark className={cn("size-5", vm.phase === "working" && "animate-pulse")} />
+        <OrbMark />
         <span className="text-[13px] font-medium text-frost/80">Enigma</span>
       </div>
 
@@ -578,12 +629,12 @@ function Reply({ id }: { id: string }) {
           {/* The fuse: one line down the answer, burning away as the key's lifespan runs out */}
           <span className="absolute top-1 bottom-1 left-0 w-px bg-frost/10" aria-hidden="true" />
           <span
-            className={cn("absolute top-1 left-0 w-px origin-top transition-transform duration-300", late ? "bg-melon" : "bg-volt-lit")}
+            className={cn("absolute top-1 left-0 w-px origin-top transition-transform duration-300", late ? "bg-orchid" : "bg-volt-lit")}
             style={{ height: "calc(100% - 0.5rem)", transform: `scaleY(${frac})` }}
             aria-hidden="true"
           />
           <span
-            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-melon shadow-[0_0_10px_#fc734d]" : "bg-volt-lit shadow-[0_0_10px_#5cc4ff]")}
+            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-orchid shadow-[0_0_10px_#e59cf4]" : "bg-volt-lit shadow-[0_0_10px_#5cc4ff]")}
             style={{ top: `calc(0.25rem + (100% - 0.5rem) * ${frac})` }}
             aria-hidden="true"
           />
@@ -607,7 +658,7 @@ function Reply({ id }: { id: string }) {
             ))}
           </div>
           <Meta>
-            <span className={late ? "text-melon" : "text-frost/80"}>Key wiped in {countdown(left)}</span>
+            <span className={late ? "text-orchid" : "text-frost/80"}>Key wiped in {countdown(left)}</span>
             {vm.attestationHash && <span>Attested in TDX</span>}
             <button
               onClick={() =>
@@ -629,10 +680,10 @@ function Reply({ id }: { id: string }) {
 
       {gone && (
         <div className="relative pl-5">
-          <span className="absolute top-1 bottom-1 left-0 w-px bg-melon/40" aria-hidden="true" />
+          <span className="absolute top-1 bottom-1 left-0 w-px bg-orchid/40" aria-hidden="true" />
           <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
           <Meta>
-            <span className="text-melon">
+            <span className="text-orchid">
               Key wiped{vm.destruction ? ` at ${new Date(vm.destruction.destructionTimestamp * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}. Nobody can read this again.
             </span>
             <Link href={`/job/${vm.id}`} className="hover:text-frost">
@@ -653,7 +704,7 @@ function Reply({ id }: { id: string }) {
       )}
 
       {(vm.phase === "failed" || vm.phase === "refunded" || vm.phase === "missing") && (
-        <p className="border-l border-melon/50 pl-5 text-[14px] text-frost/80">
+        <p className="border-l border-orchid/50 pl-5 text-[14px] text-frost/80">
           {vm.phase === "refunded" ? "This job failed after payment and was refunded." : vm.phase === "missing" ? "This job isn't on-chain." : "This job never completed. The contract refunds it after its timeout."}
         </p>
       )}
@@ -668,13 +719,14 @@ function Working({ started, stage }: { started: number; stage?: Stage }) {
   const secs = Math.max(0, Math.floor((now - started) / 1000));
   const at = stage ? STAGES.indexOf(stage) : -1;
   return (
-    <div className="pl-5">
-      <p className="text-[15px]">
-        <span className="shimmer">{stage ? STAGE_LABEL[stage] : "Waiting for the job to complete"}</span>
-        <span className="num ml-2 text-[12px] text-frost-soft/50">{secs}s</span>
+    <div>
+      <p className="inline-flex max-w-full items-center gap-3 rounded-full bg-frost/[0.04] py-2 pr-5 pl-2.5 text-[15px] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.05)]">
+        <DotOrb size={46} />
+        <span className="shimmer min-w-0">{stage ? STAGE_LABEL[stage] : "Waiting for the job to complete"}</span>
+        <span className="num shrink-0 text-[12px] text-frost-soft/60">{secs}s</span>
       </p>
       {stage && (
-        <div className="mt-2.5 flex gap-1" aria-hidden="true">
+        <div className="mt-3 flex gap-1 pl-3" aria-hidden="true">
           {STAGES.map((st, i) => (
             <span key={st} className={cn("h-0.5 w-5 rounded-full transition-colors duration-500", i < at ? "bg-volt-lit/80" : i === at ? "animate-pulse bg-frost/70" : "bg-frost/10")} />
           ))}
@@ -691,15 +743,15 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
       <UserMessage label={p.out.label} out={p.out} ttl={p.out.ttl} task={p.out.task} />
       <div className="rise">
         <div className="mb-3 flex items-center gap-2.5">
-          <OrbMark className={cn("size-5", !p.error && "animate-pulse")} />
+          <OrbMark />
           <span className="text-[13px] font-medium text-frost/80">Enigma</span>
         </div>
         {!p.error ? (
           <Working started={p.started} stage={p.stage} />
         ) : (
-          <div role="alert" className="border-l border-melon/60 pl-5">
+          <div role="alert" className="border-l border-orchid/60 pl-5">
             <p className="text-[15px] text-frost">{p.error.notConfigured ? "The server isn't set up to run jobs yet." : "This message didn't go through."}</p>
-            <p className="mt-1.5 font-mono text-[12px] leading-relaxed break-words text-frost/45">{p.error.message}</p>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed break-words text-frost/60">{plainError(p.error.message)}</p>
             {refund && <p className="mt-2 text-[13.5px] text-frost/70">Job {String(p.error.body.jobId)} was opened but couldn&rsquo;t finish, so this browser wiped its key. The payment comes back after the contract&rsquo;s timeout.</p>}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {p.error.notConfigured && (
@@ -707,7 +759,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
                   Continue as a preview
                 </Button>
               )}
-              <button onClick={onRetry} className="rounded-md px-2.5 py-1.5 text-[13px] text-frost/70 hover:bg-frost/[0.05] hover:text-frost">
+              <button onClick={onRetry} className="rounded-full px-3 py-1.5 text-[13px] text-frost/70 hover:bg-frost/[0.05] hover:text-frost">
                 Try again
               </button>
             </div>

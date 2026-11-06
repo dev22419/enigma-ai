@@ -8,8 +8,8 @@ import { LiveCanvas, noise, type Paint } from "./live-canvas";
 import { Reveal } from "./reveal";
 
 const FROST = "238,238,238";
-const BLUE = "255,154,124";
-const MELON = "252,115,77";
+const PETAL = "242,200,248";
+const ORCHID = "229,156,244";
 
 /** A readable page turning into noise as the encryption sweep passes over it. */
 const encrypt: Paint = (ctx, w, h, t) => {
@@ -23,11 +23,11 @@ const encrypt: Paint = (ctx, w, h, t) => {
       const crypt = x < sweep;
       const n = noise(x, y);
       const on = crypt ? 0.12 + 0.75 * Math.max(0, Math.sin(t * 2 + n * 40)) * n : y % 2 === 0 && x < len && n > 0.14 ? 0.8 : 0.05;
-      ctx.fillStyle = `rgba(${crypt ? BLUE : FROST},${on})`;
+      ctx.fillStyle = `rgba(${crypt ? PETAL : FROST},${on})`;
       ctx.fillRect(x * gap + 1, y * gap + 1, 3.5, 3.5);
     }
     if (sweep < cols) {
-      ctx.fillStyle = `rgba(${MELON},0.85)`;
+      ctx.fillStyle = `rgba(${ORCHID},0.85)`;
       ctx.fillRect(sweep * gap, y * gap + 1, 3.5, 3.5);
     }
   }
@@ -43,7 +43,7 @@ const countdown: Paint = (ctx, w, h, t) => {
     const peak = (0.35 + 0.65 * noise(x, 3)) * left * rows;
     for (let y = 0; y < rows; y++) {
       const lit = rows - y < peak;
-      ctx.fillStyle = lit ? `rgba(${left < 0.3 ? MELON : BLUE},${0.35 + (0.6 * (rows - y)) / rows})` : `rgba(${FROST},0.06)`;
+      ctx.fillStyle = lit ? `rgba(${left < 0.3 ? ORCHID : PETAL},${0.35 + (0.6 * (rows - y)) / rows})` : `rgba(${FROST},0.06)`;
       ctx.beginPath();
       ctx.arc(x * gap + 4, y * gap + 4, 2, 0, 6.3);
       ctx.fill();
@@ -61,7 +61,7 @@ const passThrough: Paint = (ctx, w, h, t) => {
     const x = p * w;
     const y = h * (0.26 + noise(i, 3) * 0.48);
     const inside = Math.abs(x - mid) < 34;
-    ctx.fillStyle = `rgba(${inside ? MELON : BLUE},${inside ? 1 : 0.75})`;
+    ctx.fillStyle = `rgba(${inside ? ORCHID : PETAL},${inside ? 1 : 0.75})`;
     ctx.beginPath();
     ctx.arc(x, y, 2, 0, 6.3);
     ctx.fill();
@@ -75,8 +75,8 @@ function Enclave() {
       <g className="float-up">
         <polygon points={layer(58)} fill="rgb(20 20 20)" stroke="rgb(238 238 238 / 0.32)" />
       </g>
-      <polygon points={layer(100)} fill="rgb(252 115 77)" className="chip-glow" />
-      <polygon points={layer(100)} fill="none" stroke="rgb(255 154 124)" />
+      <polygon points={layer(100)} fill="rgb(229 156 244)" className="chip-glow" />
+      <polygon points={layer(100)} fill="none" stroke="rgb(242 200 248)" />
       <g className="float-down">
         <polygon points={layer(142)} fill="rgb(20 20 20)" stroke="rgb(238 238 238 / 0.32)" />
       </g>
@@ -95,11 +95,11 @@ function KeyOrbit() {
         <circle cx="46" cy="100" r="4" fill="rgb(238 238 238 / 0.4)" />
       </g>
       <g className="orbit-back">
-        <circle cx="130" cy="42" r="3.5" fill="rgb(255 154 124)" />
+        <circle cx="130" cy="42" r="3.5" fill="rgb(242 200 248)" />
       </g>
-      <circle cx="130" cy="100" r="24" fill="rgb(252 115 77 / 0.16)" className="key-pulse" />
-      <circle cx="123" cy="100" r="7" fill="none" stroke="rgb(252 115 77)" strokeWidth="2.5" />
-      <path d="M130 100h18M142 100v6M148 100v6" fill="none" stroke="rgb(252 115 77)" strokeWidth="2.5" />
+      <circle cx="130" cy="100" r="24" fill="rgb(229 156 244 / 0.16)" className="key-pulse" />
+      <circle cx="123" cy="100" r="7" fill="none" stroke="rgb(229 156 244)" strokeWidth="2.5" />
+      <path d="M130 100h18M142 100v6M148 100v6" fill="none" stroke="rgb(229 156 244)" strokeWidth="2.5" />
     </svg>
   );
 }
@@ -108,10 +108,10 @@ function Chain() {
   return (
     <svg viewBox="0 0 260 200" className="size-full" aria-hidden="true">
       <line x1="16" y1="100" x2="244" y2="100" stroke="rgb(238 238 238 / 0.16)" />
-      <line x1="16" y1="100" x2="244" y2="100" stroke="rgb(255 154 124)" strokeWidth="1.5" className="chain-run" />
+      <line x1="16" y1="100" x2="244" y2="100" stroke="rgb(242 200 248)" strokeWidth="1.5" className="chain-run" />
       {[0, 1, 2, 3].map((i) => (
         <g key={i} className="chain-block" style={{ animationDelay: `${i * 0.5}s` }}>
-          <rect x={22 + i * 58} y="76" width="48" height="48" rx="6" fill="rgb(14 14 14)" stroke="rgb(255 154 124 / 0.65)" />
+          <rect x={22 + i * 58} y="76" width="48" height="48" rx="6" fill="rgb(14 14 14)" stroke="rgb(242 200 248 / 0.65)" />
           <path d={`M${36 + i * 58} 94h20M${36 + i * 58} 103h14`} stroke="rgb(238 238 238 / 0.55)" strokeWidth="2" />
         </g>
       ))}

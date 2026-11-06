@@ -122,13 +122,8 @@ void main() {
   float u = p.x / W;
   float Wpx = W * uRes.y;
 
-  // ---- Background: near black, an ember on the left, a cold breath on the right ----
-  vec3 bg = vec3(0.012, 0.007, 0.005);
-  vec2 q = vec2(uv.x * aspect, uv.y);
-  float ax = uAnchor.x * aspect;
-  bg += vec3(1.0, 0.34, 0.05) * 0.95 * exp(-(pow(q.x / 0.26, 2.0) + pow((q.y - 0.30) / 0.13, 2.0)));
-  bg += vec3(1.0, 0.55, 0.22) * 0.06 * exp(-(pow((q.x - ax) / 0.8, 2.0) + pow((q.y - uAnchor.y) / 0.30, 2.0)));
-  bg += vec3(0.0, 0.62, 0.72) * 0.24 * exp(-(pow((q.x - aspect) / 0.20, 2.0) + pow((q.y - 0.22) / 0.12, 2.0)));
+  // ---- Background: pure black, so the light is the only thing on the stage ----
+  vec3 bg = vec3(0.0);
 
   // ---- The plates, with a glow that spills sideways and widens with distance ----
   float blurPx = mix(0.8, 11.0, smoothstep(0.0, 0.55, dd));
@@ -151,15 +146,9 @@ void main() {
   float emerge = 1.0 - smoothstep(r - 0.35, r, d);                  // light pours out of the letters
   vec3 col = mix(bg, rib, inFan * below * emerge);
 
-  // The line the letters sit on, exactly the width of the title, and a small bloom around it
+  // The line the letters sit on, exactly the width of the title
   float cut = exp(-pow(c.y * 72.0, 2.0)) * (1.0 - smoothstep(0.88, 1.0, abs(u)));
   col += warm * 0.9 * cut * smoothstep(0.0, 0.4, intro);
-  vec2 ap = vec2(p.x, p.y * 1.7);
-  float rr = dot(ap, ap);
-  col += vec3(1.0, 0.82, 0.55) * (exp(-rr * 60.0) * 0.5 + exp(-rr * 11.0) * 0.12) * smoothstep(0.0, 0.5, intro);
-
-  // Dreamy: a faint warm veil that hangs over the middle of the fan
-  col += vec3(1.0, 0.62, 0.38) * 0.014 * exp(-u * u * 1.5) * smoothstep(0.0, 0.4, dd) * step(0.0, d) * (1.0 - smoothstep(0.7, 1.3, dd));
 
   col *= 1.0 - 0.55 * uDive;
 

@@ -69,6 +69,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ receiptHash, anchorTxHash } satisfies KeyWipeResponse);
   } catch (err) {
     const msg = safeErrorMessage(err);
-    return fail(/JobNotExpired/i.test(msg) ? 409 : 502, /JobNotExpired/i.test(msg) ? "The job's lifetime hasn't ended on-chain yet" : msg);
+    // ethers often gives back the raw selector instead of the error's name
+    const early = /JobNotExpired|0xd9fd0110/i.test(msg);
+    return fail(early ? 409 : 502, early ? "The job's lifetime hasn't ended on-chain yet" : msg);
   }
 }

@@ -86,7 +86,7 @@ export function ApiSection() {
         </div>
 
         <div ref={box} className="mx-auto mt-16 max-w-[980px] overflow-hidden rounded-[14px] bg-night-2 shadow-[0_0_0_1px_rgb(238_238_238/0.1)] md:mt-24">
-          <div className="relative h-2 overflow-hidden bg-[linear-gradient(90deg,var(--volt),#000_60%,var(--melon))]" aria-hidden="true">
+          <div className="relative h-2 overflow-hidden bg-[linear-gradient(90deg,var(--volt),#000_60%,var(--orchid))]" aria-hidden="true">
             <div className="flute absolute inset-0" />
           </div>
 
@@ -101,9 +101,9 @@ export function ApiSection() {
                     setHeld(true);
                     setStep(i);
                   }}
-                  className={cn("relative block w-full rounded-[8px] px-3 py-3 text-left transition-colors", step === i ? "text-frost" : "text-frost-soft hover:text-frost")}
+                  className={cn("relative block w-full rounded-[20px] px-4 py-3 text-left transition-colors", step === i ? "text-frost" : "text-frost-soft hover:text-frost")}
                 >
-                  {step === i && <motion.span layoutId="api-step" className="absolute inset-0 rounded-[8px] bg-frost/8" />}
+                  {step === i && <motion.span layoutId="api-step" className="absolute inset-0 rounded-[20px] bg-frost/8" />}
                   <span className="relative block text-[15px] font-semibold">{c.label}</span>
                   <span className="relative mt-0.5 block truncate font-mono text-[11px] text-frost-soft">{c.route}</span>
                 </button>
@@ -133,7 +133,7 @@ export function ApiSection() {
 
           <div className="grid grid-cols-2 border-t border-frost/10 font-mono text-[11.5px]">
             <p className="flex items-center gap-2 px-5 py-3 text-frost">
-              <span className="size-2 rounded-full bg-melon" aria-hidden="true" />
+              <span className="size-2 rounded-full bg-orchid" aria-hidden="true" />
               Your browser: holds the key
             </p>
             <p className="flex items-center gap-2 border-l border-frost/10 px-5 py-3 text-frost-soft">

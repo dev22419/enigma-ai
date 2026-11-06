@@ -129,14 +129,14 @@ export function SelfDestruct() {
           const n = noise(x, y);
           let fill: string;
           if (lit.has(y * cols + x)) {
-            fill = gone ? "rgba(238,238,238,0.2)" : late ? "rgb(255,154,124)" : "rgb(238,238,238)";
+            fill = gone ? "rgba(238,238,238,0.2)" : late ? "rgb(242,200,248)" : "rgb(238,238,238)";
           } else if (!gone && x < edge) {
             const twinkle = Math.max(0, Math.sin(t * 1.6 + n * 40));
-            fill = `rgba(255,154,124,${0.05 + 0.3 * twinkle * n})`;
+            fill = `rgba(242,200,248,${0.05 + 0.3 * twinkle * n})`;
           } else {
             fill = "rgba(238,238,238,0.045)";
           }
-          if (!gone && Math.abs(x - edge) < 1.5) fill = "rgba(252,115,77,0.85)";
+          if (!gone && Math.abs(x - edge) < 1.5) fill = "rgba(229,156,244,0.85)";
           ctx.fillStyle = fill;
           ctx.fillRect(left + x * gap + 1, top + y * gap + 1, gap - 2.5, gap - 2.5);
         }
@@ -162,7 +162,7 @@ export function SelfDestruct() {
 
         <div ref={box} className="panel mt-14 overflow-hidden md:mt-20">
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-frost/10 px-5 py-3">
-            <p className={cn("font-mono text-[12px]", gone ? "text-melon-lit" : "text-frost-soft")}>
+            <p className={cn("font-mono text-[12px]", gone ? "text-orchid-lit" : "text-frost-soft")}>
               {gone ? "key destroyed" : "key destroyed in"}
               <span className="sr-only"> {clock(frac * ttl)}</span>
             </p>
@@ -215,7 +215,7 @@ export function SelfDestruct() {
                   <p className="text-[14px] text-frost-soft">{s.name}</p>
                   <p className="mt-0.5 flex items-center gap-2 text-[15px] font-semibold">
                     <span
-                      className={cn("size-2 rounded-full transition-colors duration-300", gone ? "bg-melon" : "bg-volt-lit")}
+                      className={cn("size-2 rounded-full transition-colors duration-300", gone ? "bg-orchid" : "bg-volt-lit")}
                       style={{ transitionDelay: `${i * 160}ms` }}
                     />
                     {gone ? s.dead : s.live}
