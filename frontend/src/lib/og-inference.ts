@@ -10,6 +10,8 @@ interface InferenceResult {
   content: string;
   provider: string;
   requestId: string;
+  // Why the model stopped, e.g. "stop" or "length". "length" means the answer was cut off.
+  finishReason: string;
 }
 
 export async function runInference(
@@ -64,10 +66,11 @@ export async function runInference(
   const data = await res.json();
   const chatId = data.id || "";
   const content = data.choices?.[0]?.message?.content || "";
+  const finishReason = data.choices?.[0]?.finish_reason || "";
   const provider = data.x_0g_trace?.provider || "";
   const requestId = data.x_0g_trace?.request_id || "";
 
-  return { chatId, content, provider, requestId };
+  return { chatId, content, provider, requestId, finishReason };
 }
 
 export async function getTeeAttestation(
