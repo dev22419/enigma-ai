@@ -1,7 +1,7 @@
 // AI-assisted: Used Claude to design and write this file.
 "use client";
 
-import { ArrowUp, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
+import { ArrowUp, ChevronDown, FileText, ImageIcon, Loader2, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -44,6 +44,8 @@ const TASKS: { key: Task; name: string }[] = [
 
 const LIFESPANS = [{ label: "5 min", ttl: 300 }, ...TTL_OPTIONS].sort((a, b) => a.ttl - b.ttl);
 
+
+import { canParse, parseFile } from "@/lib/client/parse-file";
 
 const MAX_CHARS = 8_000_000;
 const TEXT_EXT = /\.(txt|md|csv|json|log|xml|html?)$/i;
@@ -354,27 +356,43 @@ function Composer({
     el.style.overflowY = el.scrollHeight > 240 ? "auto" : "hidden";
   }, [text, roomy, areaRef]);
 
+  const [parsing, setParsing] = useState(false);
+
   async function attach(f: File | undefined) {
     if (!f) return;
     setErr(null);
     try {
       let next: Attachment;
       if (IMAGE_EXT.test(f.name)) {
-        // The API wants the image as raw base64 (it builds the data URL itself), not a full data URL.
         const content = (await readAsDataUrl(f)).replace(/^data:[^,]*,/, "");
         if (content.length > MAX_CHARS) throw new Error("big");
         next = { name: f.name, content, kind: "image", bytes: f.size };
+      } else if (canParse(f.name)) {
+        setParsing(true);
+        try {
+          const parsed = await parseFile(f);
+          if (parsed.kind === "image") {
+            if (parsed.base64.length > MAX_CHARS) throw new Error("big");
+            next = { name: f.name, content: parsed.base64, kind: "image", bytes: f.size };
+          } else {
+            if (parsed.text.length > MAX_CHARS) throw new Error("big");
+            next = { name: f.name, content: parsed.text, kind: "text", bytes: f.size };
+          }
+        } finally {
+          setParsing(false);
+        }
       } else if (TEXT_EXT.test(f.name) || f.type.startsWith("text/")) {
         const content = await f.text();
         if (content.length > MAX_CHARS) throw new Error("big");
         next = { name: f.name, content, kind: "text", bytes: f.size };
       } else {
-        setErr("Only text files and images for now. For a PDF, paste its text instead.");
+        setErr("Unsupported file type. Try a PDF, DOCX, XLSX, text file, or image.");
         return;
       }
       setDraft((d) => ({ ...d, att: next }));
     } catch (e) {
-      setErr(e instanceof Error && e.message === "big" ? "That file is over the 8 MB limit." : "That file couldn't be read.");
+      setParsing(false);
+      setErr(e instanceof Error && e.message === "big" ? "That file is over the 8 MB limit." : `Couldn't read that file: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }
 
@@ -434,17 +452,18 @@ function Composer({
           onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
           onKeyDown={onKey}
           disabled={att?.kind === "image"}
-          placeholder={att?.kind === "image" ? "The image is sent on its own." : att ? "Add a note (optional)" : "Paste a document or attach one"}
+          placeholder={parsing ? "Reading document…" : att?.kind === "image" ? "The image is sent on its own." : att ? "Add a note (optional)" : "Paste or attach a document (PDF, DOCX, XLSX, text, image)"}
           className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none disabled:opacity-50"
         />
         <div className="flex items-center gap-0.5 px-2 pb-2">
           <button
             onClick={() => file.current?.click()}
-            className="grid size-8 place-items-center rounded-md text-frost/50 transition-colors hover:bg-frost/[0.05] hover:text-frost"
-            aria-label="Attach a text file or image"
-            title="Attach a text file or image"
+            disabled={parsing}
+            className="grid size-8 place-items-center rounded-md text-frost/50 transition-colors hover:bg-frost/[0.05] hover:text-frost disabled:opacity-50"
+            aria-label="Attach a file"
+            title="PDF, DOCX, XLSX, text, or image"
           >
-            <Paperclip className="size-4" />
+            {parsing ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
           </button>
           <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))}>
             {TASKS.map((t) => (
@@ -481,7 +500,7 @@ function Composer({
           ref={file}
           type="file"
           className="sr-only"
-          accept=".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,text/*,image/*"
+          accept=".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx,.doc,.xlsx,.xls,text/*,image/*"
           onChange={(e) => {
             attach(e.target.files?.[0]);
             e.target.value = "";
