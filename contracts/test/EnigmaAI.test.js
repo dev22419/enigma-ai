@@ -19,6 +19,9 @@ const TYPES = {
   ],
 };
 
+// Status enum indices
+const S = { None: 0, Pending: 1, Processing: 2, Completed: 3, Failed: 4, Refunded: 5, Expired: 6, KeyDestroyed: 7 };
+
 async function deploy() {
   const [owner, provider, company, other, oracle, rogue] = await ethers.getSigners();
   const usdt = await (await ethers.getContractFactory("MockUSDT")).deploy();
@@ -46,6 +49,13 @@ async function withJob() {
   const ctx = await deploy();
   await ctx.enigma.connect(ctx.company).deposit(2_000_000n);
   await ctx.enigma.connect(ctx.company).createJob(FILE_HASH, EXPIRY);
+  return ctx;
+}
+
+async function withCompletedJob() {
+  const ctx = await withJob();
+  const sig = await sign(ctx.oracle, ctx.domain, 1n, ctx.company.address);
+  await ctx.enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig);
   return ctx;
 }
 
@@ -97,7 +107,7 @@ describe("EnigmaAI", () => {
     it("withdraws unlocked balance only", async () => {
       const { enigma, usdt, company } = await loadFixture(deploy);
       await enigma.connect(company).deposit(1_000_000n);
-      await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // locks 0.5
+      await enigma.connect(company).createJob(FILE_HASH, EXPIRY);
       await expect(enigma.connect(company).withdraw(500_001n)).to.be.revertedWithCustomError(enigma, "InsufficientBalance");
       const before = await usdt.balanceOf(company.address);
       await expect(enigma.connect(company).withdraw(500_000n)).to.emit(enigma, "Withdrawn");
@@ -117,7 +127,7 @@ describe("EnigmaAI", () => {
       expect(await enigma.balances(company.address)).to.equal(500_000n);
       const job = await enigma.getJob(1n);
       expect(job.user).to.equal(company.address);
-      expect(job.status).to.equal(1n); // Pending
+      expect(job.status).to.equal(S.Pending);
       expect(job.payment).to.equal(PRICE);
       expect(job.fileHash).to.equal(FILE_HASH);
       expect(await enigma.nextJobId()).to.equal(2n);
@@ -136,8 +146,38 @@ describe("EnigmaAI", () => {
       await expect(enigma.connect(company).createJob(FILE_HASH, 59)).to.be.revertedWithCustomError(enigma, "InvalidExpiry");
       await expect(enigma.connect(company).createJob(FILE_HASH, 30 * 86400 + 1)).to.be.revertedWithCustomError(enigma, "InvalidExpiry");
       await enigma.connect(company).createJob(FILE_HASH, 60);
-      await enigma.connect(company).createJob(FILE_HASH, 120); // the demo's 2-minute timer
+      await enigma.connect(company).createJob(FILE_HASH, 120);
       await enigma.connect(company).createJob(FILE_HASH, 30 * 86400);
+    });
+  });
+
+  describe("startProcessing", () => {
+    it("transitions Pending → Processing", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await expect(enigma.connect(oracle).startProcessing(1n))
+        .to.emit(enigma, "JobProcessing")
+        .withArgs(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Processing);
+    });
+
+    it("rejects non-signer callers", async () => {
+      const { enigma, other } = await loadFixture(withJob);
+      await expect(enigma.connect(other).startProcessing(1n))
+        .to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
+    });
+
+    it("rejects if not Pending", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await enigma.connect(oracle).startProcessing(1n);
+      await expect(enigma.connect(oracle).startProcessing(1n))
+        .to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("rejects after timeout", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await time.increase(TIMEOUT + 1n);
+      await expect(enigma.connect(oracle).startProcessing(1n))
+        .to.be.revertedWithCustomError(enigma, "JobTimedOut");
     });
   });
 
@@ -152,10 +192,18 @@ describe("EnigmaAI", () => {
         .withArgs(1n, company.address, RESULT_HASH, ATTEST_HASH, oracle.address, blockTime + BigInt(EXPIRY));
       expect(await usdt.balanceOf(provider.address)).to.equal(PRICE);
       const job = await enigma.getJob(1n);
-      expect(job.status).to.equal(2n); // Completed
+      expect(job.status).to.equal(S.Completed);
       expect(job.resultHash).to.equal(RESULT_HASH);
       expect(job.attestationHash).to.equal(ATTEST_HASH);
       expect(job.completedAt).to.equal(blockTime);
+    });
+
+    it("works from Processing state too", async () => {
+      const { enigma, oracle, company, domain } = await loadFixture(withJob);
+      await enigma.connect(oracle).startProcessing(1n);
+      const sig = await sign(oracle, domain, 1n, company.address);
+      await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Completed);
     });
 
     it("can be relayed by any account", async () => {
@@ -187,7 +235,7 @@ describe("EnigmaAI", () => {
 
     it("rejects a signature bound to another job (no cross-job replay)", async () => {
       const { enigma, company, oracle, domain } = await loadFixture(withJob);
-      await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // job 2
+      await enigma.connect(company).createJob(FILE_HASH, EXPIRY);
       const sigForJob1 = await sign(oracle, domain, 1n, company.address);
       await expect(enigma.completeJob(2n, RESULT_HASH, ATTEST_HASH, sigForJob1)).to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
     });
@@ -229,8 +277,32 @@ describe("EnigmaAI", () => {
     });
   });
 
+  describe("failJob", () => {
+    it("transitions Processing → Failed", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await enigma.connect(oracle).startProcessing(1n);
+      await expect(enigma.connect(oracle).failJob(1n, "TEE error"))
+        .to.emit(enigma, "JobFailed")
+        .withArgs(1n, "TEE error");
+      expect((await enigma.getJob(1n)).status).to.equal(S.Failed);
+    });
+
+    it("rejects if not Processing", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await expect(enigma.connect(oracle).failJob(1n, "err"))
+        .to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("rejects non-signer callers", async () => {
+      const { enigma, oracle, other } = await loadFixture(withJob);
+      await enigma.connect(oracle).startProcessing(1n);
+      await expect(enigma.connect(other).failJob(1n, "err"))
+        .to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
+    });
+  });
+
   describe("refundJob", () => {
-    it("is blocked before the timeout", async () => {
+    it("is blocked before the timeout for Pending jobs", async () => {
       const { enigma } = await loadFixture(withJob);
       await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "JobNotTimedOut");
     });
@@ -240,8 +312,18 @@ describe("EnigmaAI", () => {
       await time.increase(TIMEOUT + 1n);
       await expect(enigma.connect(other).refundJob(1n)).to.emit(enigma, "JobRefunded").withArgs(1n, company.address, PRICE);
       expect(await enigma.balances(company.address)).to.equal(2_000_000n);
-      expect((await enigma.getJob(1n)).status).to.equal(3n); // Refunded
+      expect((await enigma.getJob(1n)).status).to.equal(S.Refunded);
       await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("refunds a Failed job immediately (no timeout needed)", async () => {
+      const { enigma, company, oracle } = await loadFixture(withJob);
+      await enigma.connect(oracle).startProcessing(1n);
+      await enigma.connect(oracle).failJob(1n, "inference failed");
+      const balBefore = await enigma.balances(company.address);
+      await enigma.refundJob(1n);
+      expect(await enigma.balances(company.address)).to.equal(balBefore + PRICE);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Refunded);
     });
 
     it("cannot refund a completed job", async () => {
@@ -258,6 +340,91 @@ describe("EnigmaAI", () => {
       await enigma.refundJob(1n);
       const sig = await sign(oracle, domain, 1n, company.address);
       await expect(enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+  });
+
+  describe("markExpired", () => {
+    it("transitions Completed → Expired after TTL", async () => {
+      const { enigma, oracle } = await loadFixture(withCompletedJob);
+      await time.increase(EXPIRY + 1);
+      await expect(enigma.connect(oracle).markExpired(1n))
+        .to.emit(enigma, "JobExpired")
+        .withArgs(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Expired);
+    });
+
+    it("rejects before TTL expires", async () => {
+      const { enigma, oracle } = await loadFixture(withCompletedJob);
+      await expect(enigma.connect(oracle).markExpired(1n))
+        .to.be.revertedWithCustomError(enigma, "JobNotExpired");
+    });
+
+    it("rejects if not Completed", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await expect(enigma.connect(oracle).markExpired(1n))
+        .to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("rejects non-signer callers", async () => {
+      const { enigma, other } = await loadFixture(withCompletedJob);
+      await time.increase(EXPIRY + 1);
+      await expect(enigma.connect(other).markExpired(1n))
+        .to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
+    });
+  });
+
+  describe("markKeyDestroyed", () => {
+    it("transitions Expired → KeyDestroyed", async () => {
+      const { enigma, oracle } = await loadFixture(withCompletedJob);
+      await time.increase(EXPIRY + 1);
+      await enigma.connect(oracle).markExpired(1n);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n))
+        .to.emit(enigma, "JobKeyDestroyed")
+        .withArgs(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.KeyDestroyed);
+    });
+
+    it("rejects if not Expired", async () => {
+      const { enigma, oracle } = await loadFixture(withCompletedJob);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n))
+        .to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("rejects non-signer callers", async () => {
+      const { enigma, oracle, other } = await loadFixture(withCompletedJob);
+      await time.increase(EXPIRY + 1);
+      await enigma.connect(oracle).markExpired(1n);
+      await expect(enigma.connect(other).markKeyDestroyed(1n))
+        .to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
+    });
+  });
+
+  describe("full lifecycle", () => {
+    it("Pending → Processing → Completed → Expired → KeyDestroyed", async () => {
+      const { enigma, oracle, company, domain } = await loadFixture(withJob);
+      // Pending → Processing
+      await enigma.connect(oracle).startProcessing(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Processing);
+      // Processing → Completed
+      const sig = await sign(oracle, domain, 1n, company.address);
+      await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Completed);
+      // Completed → Expired
+      await time.increase(EXPIRY + 1);
+      await enigma.connect(oracle).markExpired(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Expired);
+      // Expired → KeyDestroyed
+      await enigma.connect(oracle).markKeyDestroyed(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.KeyDestroyed);
+    });
+
+    it("Pending → Processing → Failed → Refunded", async () => {
+      const { enigma, oracle, company } = await loadFixture(withJob);
+      await enigma.connect(oracle).startProcessing(1n);
+      await enigma.connect(oracle).failJob(1n, "model unavailable");
+      await enigma.refundJob(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(S.Refunded);
+      expect(await enigma.balances(company.address)).to.equal(2_000_000n);
     });
   });
 
@@ -300,20 +467,20 @@ describe("EnigmaAI", () => {
 
       const sig = await sign(oracle, domain, 1n, company.address);
       await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig);
-      expect(await usdt.balanceOf(other.address)).to.equal(PRICE); // old locked price, new provider
+      expect(await usdt.balanceOf(other.address)).to.equal(PRICE);
       expect(await usdt.balanceOf(provider.address)).to.equal(0n);
     });
   });
 
   it("keeps each job's deadline when the owner changes the timeout", async () => {
     const { enigma, company, oracle, domain } = await loadFixture(withJob);
-    await enigma.setJobTimeout(10); // shrink: job 1 must still be completable
+    await enigma.setJobTimeout(10);
     await time.increase(100);
     const sig = await sign(oracle, domain, 1n, company.address);
     await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig);
 
-    await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // job 2, 10s deadline
-    await enigma.setJobTimeout(86400); // grow: job 2 must still be refundable after 10s
+    await enigma.connect(company).createJob(FILE_HASH, EXPIRY);
+    await enigma.setJobTimeout(86400);
     await time.increase(11);
     await enigma.refundJob(2n);
   });
@@ -321,11 +488,11 @@ describe("EnigmaAI", () => {
   it("keeps the contract's USDT equal to balances plus pending locks", async () => {
     const { enigma, usdt, company, oracle, domain } = await loadFixture(deploy);
     await enigma.connect(company).deposit(2_000_000n);
-    await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // 1: will complete
-    await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // 2: stays pending
+    await enigma.connect(company).createJob(FILE_HASH, EXPIRY);
+    await enigma.connect(company).createJob(FILE_HASH, EXPIRY);
     const sig = await sign(oracle, domain, 1n, company.address);
     await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig);
     const held = await usdt.balanceOf(await enigma.getAddress());
-    expect(held).to.equal((await enigma.balances(company.address)) + PRICE); // free balance + job 2 lock
+    expect(held).to.equal((await enigma.balances(company.address)) + PRICE);
   });
 });

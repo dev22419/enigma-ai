@@ -9,28 +9,31 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /// @title EnigmaAI
-/// @notice Prepaid-balance escrow for private AI jobs. A company deposits USDT, each job locks the
-///         query price, and the price is released to the service provider only when a registered
-///         oracle signer attests (EIP-712) that the TEE-verified result matches the job.
-///         The contract does not verify TEE attestations on-chain: the backend verifies the 0G TEE
-///         signature off-chain and a registered signer key vouches for (job, resultHash, attestationHash).
+/// @notice Prepaid-balance escrow for private AI jobs with full lifecycle tracking.
+///         State machine: Pending → Processing → Completed → Expired → KeyDestroyed
+///                        Processing → Failed → Refunded
+///                        Pending → Refunded (timeout)
 contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
     enum Status {
-        None,
-        Pending,
-        Completed,
-        Refunded
+        None,           // 0 — does not exist
+        Pending,        // 1 — created, payment locked
+        Processing,     // 2 — backend acknowledged, TEE inference running
+        Completed,      // 3 — result delivered, payment released to provider
+        Failed,         // 4 — processing failed before completion
+        Refunded,       // 5 — payment returned to user (timeout or failure)
+        Expired,        // 6 — result TTL expired
+        KeyDestroyed    // 7 — encryption key destroyed, cryptographic erasure complete
     }
 
     struct Job {
         address user;
         Status status;
         uint64 createdAt;
-        uint64 deadline; // fixed at creation: completeJob allowed until, refundJob allowed after
+        uint64 deadline;
         uint64 completedAt;
-        uint32 expirySeconds; // how long the result lives in Arkiv
+        uint32 expirySeconds;
         uint256 payment;
         bytes32 fileHash;
         bytes32 resultHash;
@@ -41,16 +44,13 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         "Complete(uint256 jobId,address user,bytes32 fileHash,bytes32 resultHash,bytes32 attestationHash)"
     );
 
-    uint32 public constant MIN_EXPIRY = 1 minutes; // the 2-minute demo timer and the backend's 60s floor must fit
+    uint32 public constant MIN_EXPIRY = 1 minutes;
     uint32 public constant MAX_EXPIRY = 30 days;
 
     IERC20 public immutable usdt;
 
-    /// @notice Address that receives released payments (AI compute / service provider).
     address public provider;
-    /// @notice Price locked per query, in token units (USDT uses 6 decimals).
     uint256 public queryPrice;
-    /// @notice Seconds after createJob during which a job may be completed; after it, refundJob is open.
     uint64 public jobTimeout;
 
     uint256 public nextJobId = 1;
@@ -63,6 +63,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     event JobCreated(
         uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment, uint32 expirySeconds
     );
+    event JobProcessing(uint256 indexed jobId);
     event JobCompleted(
         uint256 indexed jobId,
         address indexed user,
@@ -71,7 +72,10 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         address signer,
         uint64 expiresAt
     );
+    event JobFailed(uint256 indexed jobId, string reason);
     event JobRefunded(uint256 indexed jobId, address indexed user, uint256 amount);
+    event JobExpired(uint256 indexed jobId);
+    event JobKeyDestroyed(uint256 indexed jobId);
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
     event ProviderUpdated(address indexed provider);
@@ -86,9 +90,15 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error NotJobOwner();
     error JobTimedOut();
     error JobNotTimedOut();
+    error JobNotExpired();
     error UnauthorizedSigner();
     error SignerAlreadyRegistered();
     error SignerNotRegistered();
+
+    modifier onlySigner() {
+        if (!isSigner[msg.sender]) revert UnauthorizedSigner();
+        _;
+    }
 
     constructor(IERC20 usdt_, address provider_, uint256 queryPrice_, uint64 jobTimeout_, address initialOwner)
         Ownable(initialOwner)
@@ -104,7 +114,6 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
 
     // ---------------------------------------------------------------- balance
 
-    /// @notice Fund the caller's prepaid balance. Requires prior USDT approval.
     function deposit(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         balances[msg.sender] += amount;
@@ -112,7 +121,6 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit Deposited(msg.sender, amount);
     }
 
-    /// @notice Withdraw unlocked balance (funds locked in pending jobs are not withdrawable).
     function withdraw(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         if (balances[msg.sender] < amount) revert InsufficientBalance();
@@ -123,9 +131,6 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
 
     // ------------------------------------------------------------------- jobs
 
-    /// @notice Lock one query price from the caller's balance and open a job.
-    /// @param fileHash content hash of the encrypted file stored on 0G Storage
-    /// @param expirySeconds lifetime of the result in Arkiv (1 minute to 30 days)
     function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256 jobId) {
         if (expirySeconds < MIN_EXPIRY || expirySeconds > MAX_EXPIRY) revert InvalidExpiry();
         uint256 price = queryPrice;
@@ -149,14 +154,22 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit JobCreated(jobId, msg.sender, fileHash, price, expirySeconds);
     }
 
-    /// @notice Release payment to the provider once a registered signer attests to the result.
-    ///         Callable by anyone (typically the backend relayer) with the oracle signature.
+    /// @notice Mark a job as being processed by the TEE. Prevents double-processing.
+    function startProcessing(uint256 jobId) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Pending) revert InvalidJobStatus();
+        if (block.timestamp > job.deadline) revert JobTimedOut();
+        job.status = Status.Processing;
+        emit JobProcessing(jobId);
+    }
+
+    /// @notice Complete a job: verify oracle signature, release payment, record result.
     function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes calldata signature)
         external
         nonReentrant
     {
         Job storage job = _jobs[jobId];
-        if (job.status != Status.Pending) revert InvalidJobStatus();
+        if (job.status != Status.Pending && job.status != Status.Processing) revert InvalidJobStatus();
         if (block.timestamp > job.deadline) revert JobTimedOut();
 
         bytes32 digest = _hashTypedDataV4(
@@ -177,16 +190,45 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         );
     }
 
-    /// @notice Return a pending job's locked payment to the user's balance after the timeout.
-    ///         Callable by anyone.
+    /// @notice Mark a processing job as failed. Payment stays locked for refund.
+    function failJob(uint256 jobId, string calldata reason) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Processing) revert InvalidJobStatus();
+        job.status = Status.Failed;
+        emit JobFailed(jobId, reason);
+    }
+
+    /// @notice Refund a job's locked payment. Works for Pending (after timeout) or Failed.
     function refundJob(uint256 jobId) external {
         Job storage job = _jobs[jobId];
-        if (job.status != Status.Pending) revert InvalidJobStatus();
-        if (block.timestamp <= job.deadline) revert JobNotTimedOut();
+        if (job.status == Status.Pending) {
+            if (block.timestamp <= job.deadline) revert JobNotTimedOut();
+        } else if (job.status == Status.Failed) {
+            // Failed jobs can be refunded immediately
+        } else {
+            revert InvalidJobStatus();
+        }
 
         job.status = Status.Refunded;
         balances[job.user] += job.payment;
         emit JobRefunded(jobId, job.user, job.payment);
+    }
+
+    /// @notice Mark a completed job as expired after its TTL has passed.
+    function markExpired(uint256 jobId) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Completed) revert InvalidJobStatus();
+        if (block.timestamp < job.completedAt + job.expirySeconds) revert JobNotExpired();
+        job.status = Status.Expired;
+        emit JobExpired(jobId);
+    }
+
+    /// @notice Record that the encryption key has been destroyed (cryptographic erasure).
+    function markKeyDestroyed(uint256 jobId) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Expired) revert InvalidJobStatus();
+        job.status = Status.KeyDestroyed;
+        emit JobKeyDestroyed(jobId);
     }
 
     function getJob(uint256 jobId) external view returns (Job memory) {
@@ -214,14 +256,12 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit ProviderUpdated(provider_);
     }
 
-    /// @notice Affects only jobs created after the change; existing jobs keep their locked payment.
     function setQueryPrice(uint256 price) external onlyOwner {
         if (price == 0) revert ZeroAmount();
         queryPrice = price;
         emit QueryPriceUpdated(price);
     }
 
-    /// @notice Affects only jobs created after the change; existing jobs keep their deadline.
     function setJobTimeout(uint64 timeout) external onlyOwner {
         if (timeout == 0) revert ZeroAmount();
         jobTimeout = timeout;
