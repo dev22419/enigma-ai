@@ -54,7 +54,8 @@ function Sidebar() {
   const now = useNow();
   const path = usePathname();
   const params = useSearchParams();
-  const current = path === "/chat" ? params.get("t") : null;
+  const jobId = path.startsWith("/job/") ? path.split("/")[2] : null;
+  const current = path === "/chat" ? params.get("t") : jobId ? (index?.find((e) => e.id === jobId)?.thread ?? `job-${jobId}`) : null;
   const threads = index ? threadsOf(index) : [];
 
   const groups: [string, Thread[]][] = [];
@@ -66,7 +67,8 @@ function Sidebar() {
   }
 
   const nav: [string, string, typeof House, boolean][] = [
-    ["/chat", "Home", House, path === "/chat" || path.startsWith("/job")],
+    // An open conversation lights up in the list, so Home only lights up for a new one.
+    ["/chat", "Home", House, path === "/chat" && !threads.some((t) => t.id === current)],
     ["/dashboard", "Ledger", LayoutGrid, path === "/dashboard"],
   ];
 
@@ -113,7 +115,7 @@ function Sidebar() {
                         current === t.id ? "bg-frost/[0.07] text-frost" : "text-frost/70 hover:bg-frost/[0.04] hover:text-frost",
                       )}
                     >
-                      <span className={cn("min-w-0 flex-1 truncate", allGone && "text-frost/30")}>{t.jobs[0].fileName}</span>
+                      <span className={cn("min-w-0 flex-1 truncate", allGone && "text-frost/45")}>{t.jobs[0].fileName}</span>
                       {live?.expiresAt ? (
                         <span className="shrink-0 font-mono text-[10.5px] text-volt-lit/80">{countdown(live.expiresAt - now)}</span>
                       ) : allGone ? (

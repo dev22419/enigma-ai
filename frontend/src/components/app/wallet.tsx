@@ -127,7 +127,7 @@ export function WalletBox() {
         {({ openAccountModal, openConnectModal }) => (
           <>
             <button onClick={openAccountModal} className="flex w-full items-center gap-2 text-left text-[13px] text-frost/85 transition-colors hover:text-frost">
-              <span className={cn("size-1.5 rounded-full", chainId === CHAIN_ID ? "bg-volt-lit shadow-[0_0_8px_#5cc4ff]" : "bg-orchid")} />
+              <span className={cn("size-1.5 rounded-full", chainId === CHAIN_ID ? "bg-volt-lit shadow-[0_0_8px_#7fdcd2]" : "bg-orchid")} />
               <span className="font-mono text-[12px]">{short(address, 6, 4)}</span>
             </button>
             <p className="mt-1 flex gap-3 text-[12px] text-frost-soft/70">

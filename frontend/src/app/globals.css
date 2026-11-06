@@ -89,6 +89,16 @@ body {
     outline: 2px solid var(--volt-lit);
     outline-offset: 3px;
   }
+  /* Tailwind 4 leaves buttons with the arrow cursor */
+  button:not(:disabled),
+  [role="button"],
+  [role="tab"],
+  [role="radio"] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
 }
 
 .display {
@@ -325,6 +335,10 @@ body {
 /* ---------------------------------------------------------------- app */
 /* The app: neutral charcoal with a clean grotesk, floating over the wave */
 .app-theme {
+  --volt: #35b8ad; /* Teal, from the wave */
+  --volt-lit: #7fdcd2;
+  --color-volt: #35b8ad;
+  --color-volt-lit: #7fdcd2;
   --night: #1c1c1c;
   --night-2: #242424;
   --night-3: #2e2e2e;

@@ -115,7 +115,7 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
     <section
       className={cn(
         "relative mt-8 overflow-hidden rounded-[16px] border bg-night-2",
-        gone ? "border-night-line" : "border-volt/30 shadow-[0_30px_100px_-50px_rgb(2_151_222/0.7)]",
+        gone ? "border-night-line" : "border-volt/30 shadow-[0_30px_100px_-50px_rgb(53_184_173/0.7)]",
       )}
       aria-live="polite"
     >

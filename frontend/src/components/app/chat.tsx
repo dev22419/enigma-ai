@@ -2,10 +2,11 @@
 "use client";
 
 import { BorderBeam } from "border-beam";
-import { ArrowUp, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Select } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { useSignMessage } from "wagmi";
@@ -111,6 +112,13 @@ export function Chat({ samples }: { samples: Sample[] }) {
         .sort((a, b) => a.createdAt - b.createdAt),
     [index, threadId, runningIds],
   );
+  // A conversation keeps its document type, so the next message isn't sent as the wrong kind.
+  const lastTask = jobs.at(-1)?.task;
+  const [followed, setFollowed] = useState("");
+  if (lastTask && followed !== `${threadId}:${lastTask}`) {
+    setFollowed(`${threadId}:${lastTask}`);
+    setDraft((d) => ({ ...d, task: lastTask }));
+  }
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
   useFullWave(empty);
@@ -230,7 +238,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
         <div className="flex min-h-full flex-1 flex-col px-5 sm:px-8">
           <div className="rise mx-auto flex w-full max-w-[640px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
             <p className="inline-flex items-center gap-2 rounded-full bg-black/25 py-1 pr-3 pl-1 text-[13px] text-frost/90 backdrop-blur-sm">
-              <span className="rounded-full bg-[#4775e7] px-2 py-0.5 text-[12px] font-medium text-white">Private</span>
+              <span className="rounded-full bg-volt px-2 py-0.5 text-[12px] font-medium text-night">Private</span>
               Encrypted before it leaves your browser
             </p>
             <h1 className="mt-4 text-[clamp(1.75rem,3.2vw,2.5rem)] leading-tight font-semibold tracking-[-0.03em]">What should Enigma read?</h1>
@@ -274,15 +282,46 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 /* ================================================================== composer */
 
-function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
+/** The composer's small menus, styled like the rest of the app in place of the browser's own list. */
+function QuietSelect({ value, onChange, label, options }: { value: string; onChange: (v: string) => void; label: string; options: { value: string; label: string }[] }) {
   return (
-    <label className="relative flex min-w-0 items-center gap-1 rounded-full py-1 pr-1 pl-1.5 text-[12.5px] sm:pr-2 sm:pl-2.5 sm:text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
-      <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-1.5 size-3.5 opacity-60" />
-    </label>
+    <Select.Root value={value} onValueChange={onChange}>
+      <Select.Trigger
+        aria-label={label}
+        className="group flex min-w-0 cursor-pointer items-center gap-1 rounded-full py-1 pr-1 pl-1.5 text-[12.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-frost/40 data-[state=open]:bg-frost/[0.08] data-[state=open]:text-frost sm:pr-2 sm:pl-2.5 sm:text-[13.5px]"
+      >
+        <span className="min-w-0 truncate">
+          <Select.Value />
+        </span>
+        <Select.Icon asChild>
+          <ChevronDown className="size-3.5 shrink-0 opacity-60 transition-transform group-data-[state=open]:rotate-180" />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content
+          position="popper"
+          sideOffset={8}
+          align="start"
+          collisionPadding={10}
+          className="app-theme z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[14px] bg-[#282826] p-1 text-frost shadow-[0_12px_40px_rgb(0_0_0/0.45),inset_0_0_0_1px_rgb(255_255_255/0.09)]"
+        >
+          <Select.Viewport>
+            {options.map((o) => (
+              <Select.Item
+                key={o.value}
+                value={o.value}
+                className="flex cursor-pointer items-center justify-between gap-5 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap text-frost/75 outline-none select-none data-[highlighted]:bg-frost/[0.08] data-[highlighted]:text-frost data-[state=checked]:text-frost"
+              >
+                <Select.ItemText>{o.label}</Select.ItemText>
+                <Select.ItemIndicator>
+                  <Check className="size-3.5 text-frost/70" strokeWidth={2.2} />
+                </Select.ItemIndicator>
+              </Select.Item>
+            ))}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
   );
 }
 
@@ -441,20 +480,13 @@ function Composer({
             >
               <Paperclip className="size-4" />
             </button>
-            <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))}>
-              {TASKS.map((t) => (
-                <option key={t.key} value={t.key}>
-                  {t.name}
-                </option>
-              ))}
-            </QuietSelect>
-            <QuietSelect label="Destroy the answer after" value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}>
-              {LIFESPANS.map((o) => (
-                <option key={o.ttl} value={o.ttl}>
-                  Destroy after {o.label}
-                </option>
-              ))}
-            </QuietSelect>
+            <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))} options={TASKS.map((t) => ({ value: t.key, label: t.name }))} />
+            <QuietSelect
+              label="Destroy the answer after"
+              value={String(ttl)}
+              onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}
+              options={LIFESPANS.map((o) => ({ value: String(o.ttl), label: `Destroy after ${o.label}` }))}
+            />
             {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
             {gate.kind === "connect" ? (
               <ConnectPill className="ml-auto" />
@@ -599,7 +631,7 @@ function Reply({ id }: { id: string }) {
             aria-hidden="true"
           />
           <span
-            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-orchid shadow-[0_0_10px_#e59cf4]" : "bg-volt-lit shadow-[0_0_10px_#5cc4ff]")}
+            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-orchid shadow-[0_0_10px_#e59cf4]" : "bg-volt-lit shadow-[0_0_10px_#7fdcd2]")}
             style={{ top: `calc(0.25rem + (100% - 0.5rem) * ${frac})` }}
             aria-hidden="true"
           />
@@ -646,7 +678,7 @@ function Reply({ id }: { id: string }) {
       {gone && (
         <div className="relative pl-5">
           <span className="absolute top-1 bottom-1 left-0 w-px bg-orchid/40" aria-hidden="true" />
-          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
+          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/40">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
           <Meta>
             <span className="text-orchid">
               Key wiped{vm.destruction ? ` at ${new Date(vm.destruction.destructionTimestamp * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}. Nobody can read this again.
@@ -661,7 +693,7 @@ function Reply({ id }: { id: string }) {
       {vm.phase === "locked" && (
         <div className="relative pl-5">
           <span className="absolute top-1 bottom-1 left-0 w-px bg-frost/15" aria-hidden="true" />
-          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "Encrypted answer"}</p>
+          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/40">{vm.ciphertextPreview ?? "Encrypted answer"}</p>
           <Meta>
             <span className="text-frost/70">The key for this answer was kept in the browser session that sent it, and this one doesn&rsquo;t have it.</span>
           </Meta>
