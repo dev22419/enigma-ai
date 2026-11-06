@@ -122,21 +122,24 @@ export async function getNextJobId(): Promise<number> {
   return Number(id);
 }
 
+// Reads the job table directly instead of scanning events: public RPCs reject eth_getLogs over a
+// wide block range ("Block range is too large"), and the scan from block 0 always hit that.
+// Scans the newest `scanLimit` jobs, in small concurrent batches, and returns the caller's in id order.
 export async function getJobHistory(
-  userAddress: string
+  userAddress: string,
+  scanLimit = 200
 ): Promise<(OnChainJob & { jobId: number })[]> {
   const contract = getContract();
-  const filter = contract.filters.JobCreated(null, userAddress);
-  const events = await contract.queryFilter(filter);
-
-  const jobs = await Promise.all(
-    events.map(async (event) => {
-      const log = event as ethers.EventLog;
-      const jobId = Number(log.args[0]);
-      const job = await getJobOnChain(jobId);
-      return { ...job, jobId };
-    })
-  );
-
-  return jobs;
+  const next = Number(await contract.nextJobId());
+  const first = Math.max(1, next - scanLimit);
+  const mine: (OnChainJob & { jobId: number })[] = [];
+  const BATCH = 10;
+  for (let start = first; start < next; start += BATCH) {
+    const ids = Array.from({ length: Math.min(BATCH, next - start) }, (_, i) => start + i);
+    const jobs = await Promise.all(ids.map(async (jobId) => ({ ...(await getJobOnChain(jobId)), jobId })));
+    for (const job of jobs) {
+      if (job.user.toLowerCase() === userAddress.toLowerCase()) mine.push(job);
+    }
+  }
+  return mine;
 }

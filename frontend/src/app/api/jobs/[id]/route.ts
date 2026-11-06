@@ -66,6 +66,8 @@ export async function GET(
       requestId: row?.requestId ?? null,
       arkivEntityKey: row?.arkivEntityKey ?? null,
       inputStorage: row?.inputStorage ?? null,
+      createTxHash: row?.createTxHash ?? null,
+      completeTxHash: row?.completeTxHash ?? null,
       expiresAt,
       result,
       keyState: keyRow?.state ?? null,
