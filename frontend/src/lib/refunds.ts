@@ -22,7 +22,7 @@ export async function refundFailedJobs(now = Math.floor(Date.now() / 1000)): Pro
           await record(j.jobId, { state: "REFUNDED", txHash: null, at: now });
         } else if (chain.status === "Completed") {
           await record(j.jobId, { state: "NOT_REQUIRED", txHash: null, at: now });
-        } else if ((chain.status === "Pending" || chain.status === "Failed") && now > chain.deadline) {
+        } else if ((chain.status === "Pending" || chain.status === "Processing" || chain.status === "Failed") && now > chain.deadline) {
           const txHash = await refundJobOnChain(Number(j.jobId));
           await record(j.jobId, { state: "REFUNDED", txHash, at: now });
           refunded.push(j.jobId);
