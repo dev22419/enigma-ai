@@ -97,10 +97,21 @@ export async function POST(req: NextRequest) {
 
     // 4. Private inference on 0G with TEE verification.
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
-    const { chatId, content, provider, requestId } = await runInference(
+    const inference = await runInference(
       body.taskType, body.fileContent, isImage ? body.fileContent : undefined
     );
+    const { chatId, provider, requestId } = inference;
     if (!chatId) return abort(502, "0G returned no request id, so the run cannot be verified");
+
+    // The model reasons before it answers. With a small budget it can spend every token thinking and
+    // return no answer at all; storing and paying for that would be charging for nothing.
+    if (!inference.content.trim()) {
+      return abort(502, "0G returned an empty result (the model may have run out of tokens); nothing was stored");
+    }
+    const content =
+      inference.finishReason === "length"
+        ? `${inference.content}\n\n[Output truncated: the model reached its length limit.]`
+        : inference.content;
 
     const attestation = await getTeeAttestation(chatId, provider, requestId);
     if (!attestation) return abort(502, "TEE attestation unavailable, cannot verify inference integrity");

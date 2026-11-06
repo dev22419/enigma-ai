@@ -1,0 +1,24 @@
+SYNTHETIC DEMO DOCUMENT. Every party, number and date below is invented.
+
+SOFTWARE SERVICES AGREEMENT
+
+This Agreement is made on 1 March 2026 between Northwind Retail Pvt Ltd ("Customer") and
+Brightpath Systems LLP ("Supplier").
+
+1. SERVICES. Supplier will provide the inventory platform described in Schedule A.
+2. FEES. Customer will pay INR 4,80,000 per year, invoiced annually in advance. Late payments
+   accrue interest at 18% per annum.
+3. TERM AND RENEWAL. The initial term is 12 months. The Agreement renews automatically for
+   successive 12-month terms unless either party gives written notice at least 90 days before
+   the end of the then-current term.
+4. TERMINATION. Either party may terminate for material breach not cured within 30 days of
+   notice. Customer may not terminate for convenience. No refund of prepaid fees is due on
+   termination.
+5. LIABILITY. Supplier's total liability under this Agreement is limited to the fees paid in the
+   three months before the claim. Supplier is not liable for loss of data or loss of profit.
+6. INDEMNITY. Customer shall indemnify Supplier against all third-party claims arising from
+   Customer's use of the platform, without limit.
+7. DATA. Supplier may use anonymised Customer data to improve its products.
+8. GOVERNING LAW. The laws of Karnataka apply. Disputes go to arbitration in Bengaluru.
+
+Signed: ______________ (Customer)      ______________ (Supplier)
