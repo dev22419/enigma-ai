@@ -2,7 +2,7 @@
 "use client";
 
 import { BorderBeam } from "border-beam";
-import { ArrowUp, FileText, ImageIcon, Paperclip, X } from "lucide-react";
+import { ArrowUp, FileText, ImageIcon, Loader2, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,7 +14,6 @@ import { useSignMessage } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
 import { MAX_TTL_SECONDS, MIN_TTL_SECONDS } from "@/lib/constants";
-import { guessTask } from "@/lib/guess-task";
 import { withImageNote } from "@/lib/image-note";
 import { cn } from "@/lib/utils";
 import { DotOrb, OrbMark } from "./orb";
@@ -34,22 +33,18 @@ import {
   useIndex,
   useJobVM,
   useNow,
+  type DirectTeeConfig,
   type IndexEntry,
   type Payer,
   type Stage,
-  type Task,
 } from "./jobs";
 
-export type Sample = { key: string; label: string; task: Task; fileName: string; text: string; blurb: string };
-
-const TASKS: { key: Task; name: string }[] = [
-  { key: "medical", name: "Medical" },
-  { key: "legal", name: "Legal" },
-  { key: "financial", name: "Financial" },
-];
+export type Sample = { key: string; label: string; fileName: string; text: string; blurb: string };
 
 const LIFESPANS = [{ label: "5 min", ttl: 300 }, ...TTL_OPTIONS].sort((a, b) => a.ttl - b.ttl);
 
+
+import { canParse, parseFile } from "@/lib/client/parse-file";
 
 const MAX_CHARS = 8_000_000;
 const TEXT_EXT = /\.(txt|md|csv|json|log|xml|html?)$/i;
@@ -57,9 +52,9 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
 // `src` is only for showing the image in this tab. It is never sent.
 type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number; src?: string };
-type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
+type Outgoing = { label: string; content: string; fileName: string; ttl: number; text: string; attachment: Attachment | null };
 type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null; jobId?: string };
-type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
+type Draft = { text: string; att: Attachment | null; ttl: number };
 
 /** The balance changes when a job is paid for; ask the wallet box to re-read it once the chain has caught up. */
 const refreshCreditSoon = () => setTimeout(() => window.dispatchEvent(new Event("enigma:credit")), 1500);
@@ -80,9 +75,6 @@ function readAsDataUrl(file: File) {
   });
 }
 
-function taskName(t: Task | null) {
-  return TASKS.find((x) => x.key === t)?.name ?? "";
-}
 
 /* ================================================================== chat */
 
@@ -95,7 +87,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
   // What you typed this session, shown in your messages. Kept in memory only, never saved.
   const [sent, setSent] = useState<Record<string, Outgoing>>({});
   const [preview, setPreview] = useState(false);
-  const [draft, setDraft] = useState<Draft>({ text: "", att: null, task: "medical", ttl: 3600 });
+  const [draft, setDraft] = useState<Draft>({ text: "", att: null, ttl: 3600 });
   const bottom = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -115,18 +107,50 @@ export function Chat({ samples }: { samples: Sample[] }) {
     [index, threadId, runningIds],
   );
   // A conversation keeps its document type, so the next message isn't sent as the wrong kind.
-  const lastTask = jobs.at(-1)?.task;
-  const [followed, setFollowed] = useState("");
-  if (lastTask && followed !== `${threadId}:${lastTask}`) {
-    setFollowed(`${threadId}:${lastTask}`);
-    setDraft((d) => ({ ...d, task: lastTask }));
-  }
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
   useFullWave(empty);
   // Real jobs are paid from the connected wallet's balance, by its signature. Previews and demo mode skip this.
   const { gate, credit } = useGate(threadPreview);
   const { signMessageAsync } = useSignMessage();
+  const [directTee, setDirectTee] = useState<DirectTeeConfig | null>(null);
+  const [directTeeStatus, setDirectTeeStatus] = useState<"idle" | "checking" | "ready" | "unavailable">("idle");
+
+  // Try to set up direct TEE mode (uses a dedicated 0G key, independent of wallet chain).
+  useEffect(() => {
+    if (threadPreview || SERVICE_PAID) return;
+    let cancelled = false;
+    setDirectTeeStatus("checking");
+    (async () => {
+      try {
+        const { getBroker, discoverTeeProviders, ensureProviderReady } = await import("@/lib/client/direct-tee");
+        console.log("[direct-tee] creating broker...");
+        const broker = await getBroker();
+        console.log("[direct-tee] broker ready, discovering providers...");
+        const providers = await discoverTeeProviders(broker);
+        console.log("[direct-tee] found", providers.length, "TeeML providers");
+        if (cancelled) return;
+        if (providers.length === 0) {
+          setDirectTeeStatus("unavailable");
+          return;
+        }
+        const teeProvider = providers[0];
+        console.log("[direct-tee] setting up provider", teeProvider.address);
+        try {
+          await ensureProviderReady(broker, teeProvider.address);
+        } catch (fundErr) {
+          console.warn("[direct-tee] provider funding skipped (will retry at inference):", fundErr);
+        }
+        setDirectTee({ broker, provider: teeProvider });
+        setDirectTeeStatus("ready");
+        console.log("[direct-tee] ready —", teeProvider.model, "at", teeProvider.endpoint);
+      } catch (err) {
+        console.warn("[direct-tee] init failed:", err);
+        if (!cancelled) setDirectTeeStatus("unavailable");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [threadPreview]);
 
   // Follow the conversation as it grows (new messages, answers arriving), unless you've scrolled up to read.
   const scroller = useRef<HTMLDivElement>(null);
@@ -157,7 +181,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
     );
 
     if (asPreview) {
-      const e = createPreview({ fileName: out.label, task: out.task, ttl: out.ttl, thread: t });
+      const e = createPreview({ fileName: out.label, ttl: out.ttl, thread: t });
       setSent((s) => ({ ...s, [e.id]: out }));
       setPending((p) => p.filter((x) => x.key !== key));
       return;
@@ -167,19 +191,19 @@ export function Chat({ samples }: { samples: Sample[] }) {
         gate.kind === "ok" && gate.address && gate.price ? { address: gate.address, price: gate.price, sign: (message) => signMessageAsync({ message }) } : undefined;
       if (!payer && !SERVICE_PAID) throw new ApiError("Connect a wallet with credit to send.", 0);
       const res = await runJob(
-        { taskType: out.task, ttl: out.ttl, fileName: out.fileName, content: out.content },
+        { ttl: out.ttl, fileName: out.fileName, content: out.content },
         (stage) => setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
         (jobId) => {
           setPending((p) => p.map((x) => (x.key === key ? { ...x, jobId } : x)));
-          remember({ id: jobId, fileName: out.label, task: out.task, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t, user: payer?.address.toLowerCase() });
+          remember({ id: jobId, fileName: out.label, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t, user: payer?.address.toLowerCase() });
         },
         payer,
+        directTee ?? undefined,
       );
       refreshCreditSoon();
       remember({
         id: res.jobId,
         fileName: out.label,
-        task: out.task,
         ttl: out.ttl,
         createdAt: stamp(),
         expiresAt: res.expiresAt,
@@ -202,7 +226,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
   }
 
   function pickSample(s: Sample) {
-    setDraft((d) => ({ ...d, task: s.task, ttl: 300, att: { name: s.fileName, content: s.text, kind: "text", bytes: new Blob([s.text]).size } }));
+    setDraft((d) => ({ ...d, ttl: 300, att: { name: s.fileName, content: s.text, kind: "text", bytes: new Blob([s.text]).size } }));
     composerRef.current?.focus();
   }
 
@@ -473,7 +497,7 @@ function Composer({
   const [dragging, setDragging] = useState(false);
   const reduce = useReducedMotion();
   const file = useRef<HTMLInputElement>(null);
-  const { text, att, task, ttl } = draft;
+  const { text, att, ttl } = draft;
 
   useEffect(() => {
     const el = areaRef.current;
@@ -483,17 +507,33 @@ function Composer({
     el.style.overflowY = el.scrollHeight > 240 ? "auto" : "hidden";
   }, [text, roomy, areaRef]);
 
+  const [parsing, setParsing] = useState(false);
+
   async function attach(f: File | undefined) {
     if (!f) return;
     setErr(null);
     try {
       let next: Attachment;
       if (IMAGE_EXT.test(f.name)) {
-        // The API wants the image as raw base64 (it builds the data URL itself), not a full data URL.
         const src = await readAsDataUrl(f);
         const content = src.replace(/^data:[^,]*,/, "");
         if (content.length > MAX_CHARS) throw new Error("big");
         next = { name: f.name, content, kind: "image", bytes: f.size, src };
+      } else if (canParse(f.name)) {
+        setParsing(true);
+        try {
+          const parsed = await parseFile(f);
+          if (parsed.kind === "image") {
+            if (parsed.base64.length > MAX_CHARS) throw new Error("big");
+            next = { name: f.name, content: parsed.base64, kind: "image", bytes: f.size };
+          } else {
+            if (parsed.text.length > MAX_CHARS) throw new Error("big");
+            if (!parsed.text.trim()) { setErr("That file is empty."); return; }
+            next = { name: f.name, content: parsed.text, kind: "text", bytes: f.size };
+          }
+        } finally {
+          setParsing(false);
+        }
       } else if (TEXT_EXT.test(f.name) || f.type.startsWith("text/")) {
         const content = await f.text();
         if (content.length > MAX_CHARS) throw new Error("big");
@@ -503,12 +543,13 @@ function Composer({
         }
         next = { name: f.name, content, kind: "text", bytes: f.size };
       } else {
-        setErr("Only text files and images for now. For a PDF, paste its text instead.");
+        setErr("Unsupported file type. Try a PDF, DOCX, XLSX, text file, or image.");
         return;
       }
       setDraft((d) => ({ ...d, att: next }));
     } catch (e) {
-      setErr(e instanceof Error && e.message === "big" ? "That file is too large. The limit is 6 MB for images and 8 MB for text." : "That file couldn't be read.");
+      setParsing(false);
+      setErr(e instanceof Error && e.message === "big" ? "That file is too large. The limit is 6 MB for images and 8 MB for text." : `Couldn't read that file: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }
 
@@ -518,16 +559,14 @@ function Composer({
     if (!canSend) return;
     const typed = text.trim();
     // The document's own words pick the instructions. An image only has its name and the note to go on.
-    const picked = guessTask([att?.name, att?.kind === "image" ? "" : att?.content, typed].join(" ")) ?? task;
     let out: Outgoing;
     if (att?.kind === "image") {
-      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, task: picked, ttl, text: typed, attachment: att };
+      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, ttl, text: typed, attachment: att };
     } else if (att) {
-      // The model treats everything as document content, so notes travel with the document, clearly marked.
       const content = typed ? `${att.content}\n\nNOTES FROM THE SENDER\n${typed}` : att.content;
-      out = { label: att.name, content, fileName: att.name, task: picked, ttl, text: typed, attachment: att };
+      out = { label: att.name, content, fileName: att.name, ttl, text: typed, attachment: att };
     } else {
-      out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", task: picked, ttl, text: typed, attachment: null };
+      out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", ttl, text: typed, attachment: null };
     }
     onSend(out);
   }
@@ -548,7 +587,7 @@ function Composer({
 
   return (
     <div>
-      <BorderBeam borderRadius={16} active={!reduce}>
+      <BorderBeam borderRadius={16} colorVariant="ocean" active={!reduce}>
         <div
           className={cn(
             "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
@@ -595,17 +634,18 @@ function Composer({
             onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
             onKeyDown={onKey}
             onPaste={onPaste}
-            placeholder={att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste a document or attach one"}
+            placeholder={parsing ? "Reading document…" : att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste or attach a document (PDF, DOCX, XLSX, text, image)"}
             className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
           />
           <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
             <button
               onClick={() => file.current?.click()}
-              className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
-              aria-label="Attach a text file or image"
-              title="Attach a text file or image"
+              disabled={parsing}
+              className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost disabled:opacity-50"
+              aria-label="Attach a file"
+              title="PDF, DOCX, XLSX, text, or image"
             >
-              <Paperclip className="size-4" />
+              {parsing ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
             </button>
             <TimerWheel value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: v }))} presets={LIFESPANS} />
             {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
@@ -630,7 +670,7 @@ function Composer({
             ref={file}
             type="file"
             className="sr-only"
-            accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,text/*"
+            accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx,.doc,.xlsx,.xls,text/*"
             onChange={(e) => {
               attach(e.target.files?.[0]);
               e.target.value = "";
@@ -678,7 +718,7 @@ function Thumb({ src, className }: { src: string; className?: string }) {
   return <img src={src} alt="" className={cn("shrink-0 rounded-lg object-cover", className)} />;
 }
 
-function UserMessage({ label, out, ttl, task }: { label: string; out?: Outgoing; ttl: number; task: Task | null }) {
+function UserMessage({ label, out, ttl }: { label: string; out?: Outgoing; ttl: number }) {
   const typed = out?.text ?? "";
   const doc = out?.attachment;
   return (
@@ -695,7 +735,7 @@ function UserMessage({ label, out, ttl, task }: { label: string; out?: Outgoing;
         {typed && <p className={cn("line-clamp-6 text-[15px] leading-relaxed whitespace-pre-wrap text-frost/90", (doc || !out) && "mt-2")}>{typed}</p>}
       </div>
       <p className="mt-1.5 px-1 text-[12px] text-frost-soft/60">
-        {taskName(task)}, destroyed after {ttlLabel(ttl)}
+        Destroyed after {ttlLabel(ttl)}
         {!out && ". Content isn't kept in this browser"}
       </p>
     </div>
@@ -709,7 +749,7 @@ function Meta({ children }: { children: ReactNode }) {
 function Turn({ entry, out }: { entry: IndexEntry; out?: Outgoing }) {
   return (
     <div className="space-y-6">
-      <UserMessage label={entry.fileName} out={out} ttl={entry.ttl} task={entry.task} />
+      <UserMessage label={entry.fileName} out={out} ttl={entry.ttl} />
       <Reply id={entry.id} />
     </div>
   );
@@ -858,7 +898,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
   const refund = p.error && typeof p.error.body.refund === "string";
   return (
     <div className="space-y-6">
-      <UserMessage label={p.out.label} out={p.out} ttl={p.out.ttl} task={p.out.task} />
+      <UserMessage label={p.out.label} out={p.out} ttl={p.out.ttl} />
       <div className="rise">
         <div className="mb-3 flex items-center gap-2.5">
           <OrbMark />

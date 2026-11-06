@@ -1,7 +1,7 @@
 // AI-assisted: Used Claude to write this file.
 "use client";
 
-import { House, LayoutGrid, PanelLeft, PanelLeftClose, PanelLeftOpen, SquarePen } from "lucide-react";
+import { House, LayoutGrid, PanelLeft, PanelLeftClose, PanelLeftOpen, Play, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -9,8 +9,15 @@ import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type React
 import { Logo } from "@/components/landing/site-nav";
 import { cn } from "@/lib/utils";
 import { countdown, localPhase, threadsOf, useIndex, useNow, wipeExpired, type Thread } from "./jobs";
+import { initVault } from "@/lib/client/vault";
 import { WalletBox } from "./wallet";
 import { Wave, WaveContext } from "./wave";
+
+/** Populates the sync key-cache from IndexedDB on first mount. */
+function VaultInit() {
+  useEffect(() => { initVault(); }, []);
+  return null;
+}
 
 /** Wipes each job's key from this browser the moment its lifespan ends (task #74). */
 function KeyWiper() {
@@ -71,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <WaveContext.Provider value={setFull}>
+      <VaultInit />
       <KeyWiper />
       <div className="app-theme flex h-dvh flex-col bg-[#0c0c0c] text-frost lg:flex-row lg:p-1.5 lg:pl-0">
         {/* Phone: a top bar, with the full sidebar in a slide-out menu */}
@@ -141,6 +149,7 @@ function useNav() {
   const nav: [string, string, typeof House, boolean][] = [
     // An open conversation lights up in the list, so Home only lights up for a new one.
     ["/chat", "Home", House, path === "/chat" && !threads.some((t) => t.id === current)],
+    ["/demo", "Demo", Play, path === "/demo"],
     ["/dashboard", "Ledger", LayoutGrid, path === "/dashboard"],
   ];
   return { index, current, threads, nav };

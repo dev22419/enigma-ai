@@ -46,7 +46,7 @@ function Header({ vm }: { vm: JobVM }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[12px] text-frost-soft">
           <span>{vm.preview ? "Preview job" : `Job ${vm.id}`}</span>
-          <TaskChip task={vm.task} className="text-frost-soft" />
+          <TaskChip task="analysis" className="text-frost-soft" />
           {vm.ttl > 0 && <span>lifespan {ttlLabel(vm.ttl)}</span>}
           {vm.preview && (
             <span className="rounded-full border border-orchid/50 px-2 py-px text-orchid" title="Simulated in this browser because the server isn't configured">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { TASK_TYPES, MIN_TTL_SECONDS, MAX_TTL_SECONDS } from "@/lib/constants";
+import { MIN_TTL_SECONDS, MAX_TTL_SECONDS } from "@/lib/constants";
 import { createJobOnChain } from "@/lib/contract";
 import { randomToken } from "@/lib/crypto";
 import { withStore } from "@/lib/store";
@@ -23,9 +23,6 @@ export async function POST(req: NextRequest) {
     return fail(400, "Body must be JSON");
   }
 
-  if (!TASK_TYPES.includes(body.taskType)) {
-    return fail(400, `Invalid taskType. Must be one of: ${TASK_TYPES.join(", ")}`);
-  }
   if (typeof body.fileName !== "string" || !body.fileName || body.fileName.length > 200) {
     return fail(400, "fileName is required (200 characters at most)");
   }
@@ -85,7 +82,6 @@ export async function POST(req: NextRequest) {
   await withStore((d) => {
     d.jobs[id] = {
       jobId: id,
-      taskType: body.taskType,
       fileName: body.fileName,
       fileHash: body.fileHash,
       inputCiphertextHash: null,

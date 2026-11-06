@@ -11,7 +11,6 @@
 // browser→TEE, eliminating this transit entirely).
 
 import { NextRequest, NextResponse } from "next/server";
-import { TASK_TYPES } from "@/lib/constants";
 import { runInference, getTeeAttestation, mimeTypeFromFileName } from "@/lib/og-inference";
 import { splitImageNote } from "@/lib/image-note";
 import { hashContent } from "@/lib/oracle-signer";
@@ -35,9 +34,6 @@ export async function POST(req: NextRequest) {
     return fail(400, "Body must be JSON");
   }
 
-  if (!TASK_TYPES.includes(body.taskType)) {
-    return fail(400, `Invalid taskType. Must be one of: ${TASK_TYPES.join(", ")}`);
-  }
   if (typeof body.content !== "string" || !body.content) {
     return fail(400, "content is required");
   }
@@ -100,7 +96,6 @@ export async function POST(req: NextRequest) {
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
     const { image, note } = isImage ? splitImageNote(body.content) : { image: undefined, note: undefined };
     const inference = await runInference(
-      body.taskType,
       body.content,
       image,
       mimeTypeFromFileName(body.fileName),

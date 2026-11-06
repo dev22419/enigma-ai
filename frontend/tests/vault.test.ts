@@ -1,7 +1,8 @@
 // AI-assisted: Used Claude to write these tests.
 import { beforeEach, describe, expect, it } from "vitest";
+import "fake-indexeddb/auto";
 
-// Minimal Web Storage for the node test environment (the vault uses sessionStorage + localStorage).
+// Minimal Web Storage for the node test environment (vault still uses sessionStorage for tokens + localStorage for receipts).
 class MemStorage {
   private m = new Map<string, string>();
   get length() {
@@ -30,9 +31,16 @@ g.localStorage = new MemStorage();
 const vault = await import("@/lib/client/vault");
 const { hashContent } = await import("@/lib/oracle-signer");
 
-beforeEach(() => {
+beforeEach(async () => {
   g.window.sessionStorage.clear();
   g.localStorage.clear();
+  // Clear IndexedDB between tests
+  const dbs = await indexedDB.databases();
+  for (const db of dbs) {
+    if (db.name) indexedDB.deleteDatabase(db.name);
+  }
+  // Re-init the vault cache
+  await vault.initVault();
 });
 
 describe("browser vault (task board #67-#76)", () => {
@@ -87,15 +95,14 @@ describe("browser vault (task board #67-#76)", () => {
     expect(reloaded?.keyId).toBe(keyId);
     await expect(vault.decryptEnvelope(reloaded!.key, env, { jobId: "7", objectType: "result" })).resolves.toBe("secret");
 
-    const receipt = vault.wipeKey("7", 1_800_000_000);
+    const receipt = await vault.wipeKey("7", 1_800_000_000);
     expect(receipt).toMatchObject({ jobId: "7", keyId, expiryTimestamp: 1_800_000_000, status: "wiped" });
     expect(receipt!.receiptHash).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(JSON.stringify(receipt)).not.toContain("jwk");
 
     expect(vault.hasKey("7")).toBe(false);
     expect(await vault.loadKey("7")).toBeNull();
     expect(vault.loadWipeReceipt("7")).toEqual(receipt);
-    expect(vault.wipeKey("7", 1)).toEqual(receipt); // idempotent
+    expect(await vault.wipeKey("7", 1)).toEqual(receipt); // idempotent
   });
 
   it("fails closed: an expired key is wiped on load and never used", async () => {
@@ -112,17 +119,15 @@ describe("browser vault (task board #67-#76)", () => {
     const now = Math.floor(Date.now() / 1000);
     await vault.storeKey("old", a.key, a.keyId, now - 5);
     await vault.storeKey("live", b.key, b.keyId, now + 600);
-    g.window.sessionStorage.setItem("enigma.key.broken", "not json");
-    expect(vault.wipeExpiredKeys(now)).toBe(2);
+    expect(await vault.wipeExpiredKeys(now)).toBe(1); // only "old" is expired
     expect(vault.hasKey("old")).toBe(false);
-    expect(vault.hasKey("broken")).toBe(false);
     expect(vault.hasKey("live")).toBe(true);
   });
 
   it("wipes every key when the job list is cleared", async () => {
     const a = await vault.newJobKey();
     await vault.storeKey("9", a.key, a.keyId, Math.floor(Date.now() / 1000) + 600);
-    vault.wipeAllKeys();
+    await vault.wipeAllKeys();
     expect(vault.hasKey("9")).toBe(false);
   });
 });

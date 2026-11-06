@@ -39,7 +39,7 @@ describe("model choice", () => {
   it("sends X-0G-Provider-Trust-Mode: private on every request", async () => {
     const { runInference } = await load();
     const f = fetchSequence(answer());
-    await runInference("medical", "document text");
+    await runInference("document text");
     const headers = f.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers["X-0G-Provider-Trust-Mode"]).toBe("private");
   });
@@ -47,7 +47,7 @@ describe("model choice", () => {
   it("uses 0G's own model by default and records it", async () => {
     const { runInference } = await load();
     const f = fetchSequence(answer());
-    const r = await runInference("medical", "document text");
+    const r = await runInference("document text");
     expect(modelsAsked(f)).toEqual(["0gm-1.0-35b-a3b"]);
     expect(r.model).toBe("0gm-1.0-35b-a3b");
   });
@@ -55,21 +55,21 @@ describe("model choice", () => {
   it("uses the model set in ZG_MODEL", async () => {
     const { runInference } = await load({ ZG_MODEL: "glm-5.3" });
     const f = fetchSequence(answer());
-    expect((await runInference("legal", "text")).model).toBe("glm-5.3");
+    expect((await runInference("text")).model).toBe("glm-5.3");
     expect(modelsAsked(f)).toEqual(["glm-5.3"]);
   });
 
   it("never falls back unless a fallback is configured", async () => {
     const { runInference } = await load();
     const f = fetchSequence(down());
-    await expect(runInference("medical", "text")).rejects.toThrow("0G inference failed: 502");
+    await expect(runInference("text")).rejects.toThrow("0G inference failed: 502");
     expect(f).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to the configured model when the provider is down, and says which one answered", async () => {
     const { runInference } = await load({ ZG_FALLBACK_MODEL: "glm-5.3" });
     const f = fetchSequence(down(), answer());
-    const r = await runInference("medical", "text");
+    const r = await runInference("text");
     expect(modelsAsked(f)).toEqual(["0gm-1.0-35b-a3b", "glm-5.3"]);
     expect(r).toMatchObject({ model: "glm-5.3", content: "answer", provider: "0xprovider", requestId: "req-1" });
   });
@@ -77,21 +77,21 @@ describe("model choice", () => {
   it("does not fall back on a request error, which would fail on the other model too", async () => {
     const { runInference } = await load({ ZG_FALLBACK_MODEL: "glm-5.3" });
     const f = fetchSequence(badRequest());
-    await expect(runInference("medical", "text")).rejects.toThrow("400");
+    await expect(runInference("text")).rejects.toThrow("400");
     expect(f).toHaveBeenCalledTimes(1);
   });
 
   it("never sends an image to the fallback", async () => {
     const { runInference } = await load({ ZG_FALLBACK_MODEL: "glm-5.3" });
     const f = fetchSequence(down());
-    await expect(runInference("medical", "ignored", "BASE64DATA", "image/png")).rejects.toThrow("502");
+    await expect(runInference("ignored", "BASE64DATA", "image/png")).rejects.toThrow("502");
     expect(modelsAsked(f)).toEqual(["0gm-1.0-35b-a3b"]);
   });
 
   it("reports the last error when both models are down", async () => {
     const { runInference } = await load({ ZG_FALLBACK_MODEL: "glm-5.3" });
     const f = fetchSequence(down(), down());
-    await expect(runInference("medical", "text")).rejects.toThrow("0G inference failed: 502");
+    await expect(runInference("text")).rejects.toThrow("0G inference failed: 502");
     expect(f).toHaveBeenCalledTimes(2);
   });
 
@@ -108,14 +108,14 @@ describe("a note beside an image", () => {
   it("reaches the model with the image", async () => {
     const { runInference } = await load();
     const f = fetchSequence(answer());
-    await runInference("medical", "aGk=", "aGk=", "image/png", "Is this dose normal?");
+    await runInference("aGk=", "aGk=", "image/png", "Is this dose normal?");
     expect(sentText(f)).toContain("Is this dose normal?");
   });
 
   it("leaves the prompt alone when there is no note", async () => {
     const { runInference } = await load();
     const f = fetchSequence(answer());
-    await runInference("medical", "aGk=", "aGk=");
+    await runInference("aGk=", "aGk=");
     expect(sentText(f)).toBe("Analyze this document:");
   });
 });

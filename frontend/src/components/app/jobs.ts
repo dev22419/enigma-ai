@@ -22,11 +22,13 @@ import {
 } from "@/lib/client/vault";
 import { buildAuthMessage } from "@/lib/auth-message";
 import { CHAIN_ID, ENIGMA_ADDRESS } from "@/lib/client/chain";
+import type { ZGComputeNetworkBroker } from "@0gfoundation/0g-compute-ts-sdk";
+import type { TeeProvider, DirectInferenceResult } from "@/lib/client/direct-tee";
 
 /**
  * Client side of the Enigma API (POST /api/jobs, GET /api/jobs/[id], /receipt, /balance, /history).
  *
- * The browser keeps an index of the jobs it started (id, file name, task, lifespan) so the desk can
+ * The browser keeps an index of the jobs it started (id, file name, lifespan) so the desk can
  * list them. It never stores answers: a result is fetched from the API while the job's key exists,
  * and once the key is destroyed there is nothing left to fetch.
  *
@@ -34,7 +36,6 @@ import { CHAIN_ID, ENIGMA_ADDRESS } from "@/lib/client/chain";
  * reports it is not configured. They are always labelled as previews.
  */
 
-export type Task = "medical" | "legal" | "financial";
 /** locked: the job finished, but this browser session doesn't hold its key (e.g. a new tab session). */
 export type Phase = "working" | "readable" | "locked" | "destroyed" | "failed" | "refunded" | "missing";
 
@@ -49,7 +50,6 @@ export const TTL_OPTIONS = [
 export interface IndexEntry {
   id: string;
   fileName: string;
-  task: Task;
   ttl: number;
   createdAt: number; // ms
   expiresAt: number | null; // ms
@@ -72,7 +72,6 @@ export interface JobVM {
   preview: boolean;
   phase: Phase;
   fileName: string;
-  task: Task | null;
   ttl: number;
   createdAt: number;
   expiresAt: number | null;
@@ -153,8 +152,8 @@ export function patchEntry(id: string, patch: Partial<IndexEntry>) {
 }
 
 /** Clears the job list. Keys go first, so nothing readable outlives the list that points to it. */
-export function forgetAll() {
-  wipeAllKeys();
+export async function forgetAll() {
+  await wipeAllKeys();
   saveIndex([]);
 }
 
@@ -211,15 +210,22 @@ interface StoreResultResponse {
   expiresAt: number;
 }
 
-export type Stage = "encrypt" | "authorize" | "create" | "infer" | "seal" | "store";
+export type Stage = "encrypt" | "authorize" | "create" | "infer" | "direct-infer" | "seal" | "store";
 export const STAGE_LABEL: Record<Stage, string> = {
   encrypt: "Encrypting in your browser",
   authorize: "Waiting for your wallet to sign",
   create: "Opening the job on Whitechain",
   infer: "Reading inside the 0G enclave",
+  "direct-infer": "Reading directly inside the TEE (no backend)",
   seal: "Encrypting the answer in your browser",
   store: "Storing the encrypted answer on Arkiv",
 };
+
+/** When set, runJob uses the direct browser→TEE path. The plaintext never touches the backend. */
+export interface DirectTeeConfig {
+  broker: ZGComputeNetworkBroker;
+  provider: TeeProvider;
+}
 
 /** Answers decrypted (or received) in this tab, so they show without a round trip. Memory only. */
 const fresh = new Map<string, string>();
@@ -254,10 +260,11 @@ export function neutralFileName(name: string) {
 }
 
 export async function runJob(
-  input: { taskType: Task; ttl: number; fileName: string; content: string },
+  input: { ttl: number; fileName: string; content: string },
   onStage: (s: Stage) => void,
   onCreated?: (jobId: string) => void,
   payer?: Payer,
+  directTee?: DirectTeeConfig,
 ): Promise<{ jobId: string; expiresAt: number; result: string }> {
   onStage("encrypt");
   const fileName = neutralFileName(input.fileName);
@@ -286,7 +293,6 @@ export async function runJob(
 
   onStage("create");
   const created = await post<CreateJobResponse>("/api/jobs", {
-    taskType: input.taskType,
     ttl: input.ttl,
     fileName,
     fileHash,
@@ -301,17 +307,63 @@ export async function runJob(
   onCreated?.(jobId);
 
   try {
-    onStage("infer");
-    // 0G's providers occasionally drop a request. Another try is safe (the server allows three per job).
-    let inf: InferResponse | null = null;
-    for (let attempt = 1; !inf; attempt++) {
-      try {
-        inf = await post<InferResponse>("/api/infer", { jobId, taskType: input.taskType, content: input.content, fileName }, created.accessToken);
-      } catch (e) {
-        const retryable = e instanceof ApiError && e.status === 502 && attempt < 3;
-        if (!retryable) throw e;
-        await new Promise((r) => setTimeout(r, 2000 * attempt));
+    let inf: InferResponse;
+
+    if (directTee) {
+      // PATH B: Direct browser→TEE. Plaintext never touches the backend or the 0G router.
+      onStage("direct-infer");
+      const { runDirectInference } = await import("@/lib/client/direct-tee");
+      const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(fileName);
+      let direct: DirectInferenceResult | null = null;
+      for (let attempt = 1; !direct; attempt++) {
+        try {
+          direct = await runDirectInference(
+            directTee.broker,
+            directTee.provider,
+            input.content,
+            isImage ? input.content : undefined,
+          );
+        } catch (e) {
+          if (attempt >= 3) throw e;
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        }
       }
+      // Build the attestation from the direct response (same shape as the server's getTeeAttestation)
+      const attestation = JSON.stringify({
+        chatId: direct.chatId,
+        provider: direct.provider,
+        requestId: direct.chatId,
+        verifyTee: true,
+        model: direct.model,
+        timestamp: Math.floor(Date.now() / 1000),
+        directMode: true,
+      });
+      const result =
+        direct.finishReason === "length"
+          ? `${direct.content}\n\n[Output truncated: the model reached its length limit.]`
+          : direct.content;
+      inf = {
+        result,
+        chatId: direct.chatId,
+        resultHash: hashText(result),
+        attestationHash: hashText(attestation),
+        provider: direct.provider,
+        requestId: direct.chatId,
+      };
+    } else {
+      // PATH A: Proxy through backend to 0G TEE (private trust mode).
+      onStage("infer");
+      let proxyResult: InferResponse | null = null;
+      for (let attempt = 1; !proxyResult; attempt++) {
+        try {
+          proxyResult = await post<InferResponse>("/api/infer", { jobId, content: input.content, fileName }, created.accessToken);
+        } catch (e) {
+          const retryable = e instanceof ApiError && e.status === 502 && attempt < 3;
+          if (!retryable) throw e;
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        }
+      }
+      inf = proxyResult;
     }
 
     onStage("seal");
@@ -323,12 +375,12 @@ export async function runJob(
       { encryptedResult, resultHash: inf.resultHash, attestationHash: inf.attestationHash, chatId: inf.chatId },
       created.accessToken,
     );
-    setKeyExpiry(jobId, stored.expiresAt);
+    await setKeyExpiry(jobId, stored.expiresAt);
     fresh.set(jobId, inf.result);
     return { jobId, expiresAt: stored.expiresAt * 1000, result: inf.result };
   } catch (e) {
     // The job is open on-chain but won't complete: drop the key, and the contract refunds after its timeout.
-    wipeKey(jobId, Math.floor(Date.now() / 1000));
+    await wipeKey(jobId, Math.floor(Date.now() / 1000));
     const err = e instanceof ApiError ? e : new ApiError(String(e), 0);
     throw new ApiError(err.message, err.status, { ...err.body, jobId, refund: "after the contract's timeout" });
   }
@@ -405,7 +457,6 @@ function fromApi(j: ApiJob, entry: IndexEntry | undefined, now: number, plain: s
     preview: false,
     phase: phaseOf(j, now, plain, !!wipe, held),
     fileName: entry?.fileName ?? `Job ${j.jobId}`,
-    task: entry?.task ?? null,
     ttl: j.expirySeconds || entry?.ttl || 0,
     createdAt: j.createdAt ? j.createdAt * 1000 : entry?.createdAt ?? now,
     expiresAt: j.expiresAt ? j.expiresAt * 1000 : entry?.expiresAt ?? null,
@@ -444,8 +495,9 @@ function rand(n: number) {
   return "0x" + Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-export const PREVIEW_ANSWERS: Record<Task, string> = {
-  medical: `SUMMARY
+/** Preview answers only exist for the bundled samples; anything else gets an honest placeholder. */
+const SAMPLE_ANSWERS: Record<string, string> = {
+  "sample-medical-report.txt": `SUMMARY
 - Follow-up for type 2 diabetes and raised blood pressure. Increased thirst and dizziness on standing for three weeks.
 KEY FINDINGS
 - HbA1c 8.4% (flagged high), up from 7.6% in April.
@@ -458,7 +510,7 @@ MEDICATIONS
 ITEMS NEEDING CLINICIAN ATTENTION
 - Dizziness on standing while on lisinopril.
 - HbA1c rising across the last two results.`,
-  legal: `SUMMARY
+  "sample-legal-contract.txt": `SUMMARY
 - Two-year supply agreement between a manufacturer and a distributor, renewing automatically.
 PARTIES AND DATES
 - Effective 1 December 2026. Initial term 24 months.
@@ -470,7 +522,7 @@ RISKS AND UNUSUAL CLAUSES
 - Clause 14.2 caps the supplier's liability at one month of fees.
 MISSING OR AMBIGUOUS TERMS
 - No service level for late deliveries: Not stated.`,
-  financial: `SUMMARY
+  "sample-financial-statement.txt": `SUMMARY
 - Quarterly statement showing revenue growth with a falling cash balance.
 KEY FIGURES
 - Revenue 4.2 crore INR for Q3 2026.
@@ -481,13 +533,6 @@ RISKS AND ANOMALIES
 - 38% of revenue from a single customer.
 OPEN QUESTIONS
 - The cause of the drop in cash is not stated.`,
-};
-
-/** Preview answers only exist for the bundled samples; anything else gets an honest placeholder. */
-const SAMPLE_ANSWERS: Record<string, string> = {
-  "sample-medical-report.txt": PREVIEW_ANSWERS.medical,
-  "sample-legal-contract.txt": PREVIEW_ANSWERS.legal,
-  "sample-financial-statement.txt": PREVIEW_ANSWERS.financial,
   "sample-injection-test.txt": `SUMMARY
 - Routine check for demo patient 0002 with no complaints.
 KEY FINDINGS
@@ -504,18 +549,17 @@ function previewAnswer(e: IndexEntry) {
   return (
     SAMPLE_ANSWERS[e.fileName] ??
     `SUMMARY
-- This is a preview, so no model read your text. A real job would return an analysis in the ${e.task} sections here.
+- This is a preview, so no model read your text. A real job would return a full analysis here.
 WHAT HAPPENS FOR REAL
 - Your text is encrypted with a one-time key, read inside 0G's enclave, and the answer is stored encrypted on Arkiv until the timer ends.`
   );
 }
 
-export function createPreview(input: { fileName: string; task: Task; ttl: number; thread?: string }): IndexEntry {
+export function createPreview(input: { fileName: string; ttl: number; thread?: string }): IndexEntry {
   const now = Date.now();
   const entry: IndexEntry = {
     id: `preview-${now.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
     fileName: input.fileName,
-    task: input.task,
     ttl: input.ttl,
     createdAt: now,
     expiresAt: now + PIPELINE_MS + input.ttl * 1000,
@@ -562,7 +606,6 @@ function fromPreview(e: IndexEntry, now: number): JobVM {
     preview: true,
     phase,
     fileName: e.fileName,
-    task: e.task,
     ttl: e.ttl,
     createdAt: e.createdAt,
     expiresAt: exp,
@@ -678,11 +721,11 @@ export async function tryDecrypt(id: string): Promise<{ ok: true } | { ok: false
  * from storage, so a key is wiped even if its job is missing from the list. Arkiv's expiry, when
  * known on the list, also counts.
  */
-export function wipeExpired(all: IndexEntry[], now: number) {
-  let wiped = wipeExpiredKeys(Math.floor(now / 1000));
+export async function wipeExpired(all: IndexEntry[], now: number) {
+  let wiped = await wipeExpiredKeys(Math.floor(now / 1000));
   for (const e of all) {
     if (e.preview || !e.expiresAt || now < e.expiresAt) continue;
-    if (hasKey(e.id) && wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
+    if (hasKey(e.id) && await wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
   }
   anchorPendingWipes(all);
   return wiped;

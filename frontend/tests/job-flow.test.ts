@@ -135,13 +135,12 @@ const get = (id: string, token = "") =>
 const receipt = (id: string) => getReceipt(new NextRequest(`http://localhost/api/jobs/${id}/receipt`), ctx(id));
 
 const jobReq = {
-  taskType: "medical",
   ttl: 120,
   fileName: "report.txt",
   fileHash: FILE_HASH,
   encryptedFile: "ENCRYPTED_CIPHERTEXT_DATA",
 };
-const inferBody = { taskType: "medical", content: "Patient record content", fileName: "report.txt" };
+const inferBody = { content: "Patient record content", fileName: "report.txt" };
 const storeText = () => readFileSync(path.join(dataDir, "store.json"), "utf8");
 
 beforeEach(() => {
@@ -413,7 +412,6 @@ describe("0G Storage (#49)", () => {
 describe("request guards", () => {
   it("rejects bad input before touching the chain", async () => {
     for (const bad of [
-      { ...jobReq, taskType: "tax" },
       { ...jobReq, ttl: 5 },
       { ...jobReq, ttl: 90.5 },
       { ...jobReq, fileName: "" },
