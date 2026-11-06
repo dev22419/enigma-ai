@@ -627,7 +627,7 @@ function Working({ started, stage }: { started: number; stage?: Stage }) {
   return (
     <div>
       <p className="inline-flex max-w-full items-center gap-3 rounded-full bg-frost/[0.04] py-2 pr-5 pl-2.5 text-[15px] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.05)]">
-        <DotOrb size={38} />
+        <DotOrb size={46} />
         <span className="shimmer min-w-0">{stage ? STAGE_LABEL[stage] : "Waiting for the job to complete"}</span>
         <span className="num shrink-0 text-[12px] text-frost-soft/60">{secs}s</span>
       </p>

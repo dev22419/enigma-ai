@@ -1,78 +1,45 @@
-// AI-assisted: Used Claude to design and write this file.
+// AI-assisted: Used Claude to write this file. The orb's motion is the `composing` state of thinking-orbs (MIT).
 "use client";
 
 import { useEffect, useRef } from "react";
+import { MODE_FRAMES, resolvePreset, type OrbFrame } from "thinking-orbs/engine";
 
 import { cn } from "@/lib/utils";
 
 type Rgb = readonly [number, number, number];
 
-const TILT = -0.1;
 const BLUE: Rgb = [2, 151, 222];
 const LIT: Rgb = [92, 196, 255];
 const MELON: Rgb = [252, 115, 77];
 const PEACH: Rgb = [255, 190, 160];
-const REST_TIME = 2.2; // the frame shown when the orb isn't animating
+const REST_TIME = 0.6; // the frame thinking-orbs shows for reduced motion
 
 const mix = (a: Rgb, b: Rgb, k: number): Rgb => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
 /**
- * A sphere of fine vertical ribs, each made of dots, with a dark wave rolling through its middle.
- * Blue on one side, cantaloupe on the other. Below 90px it draws fewer ribs without additive light,
- * otherwise they pile up to white and the colours are lost.
+ * The package only paints in one ink, so its dots are painted here instead: position, size and depth come
+ * straight from the engine, and colour runs from Electric Blue on the left to Cantaloupe on the right.
+ * `white` is the engine's ink value: 0 is the nearest, brightest dot on a dark background.
  */
-function drawOrb(ctx: CanvasRenderingContext2D, size: number, t: number) {
-  const c = size / 2;
-  const R = size * 0.47;
-  const cosT = Math.cos(TILT);
-  const sinT = Math.sin(TILT);
-  const small = size < 90;
-  const meridians = small ? 34 : 58;
-  const points = small ? 34 : 72;
-  const spin = t * 0.5;
-  const w = small ? size / 62 : size / 135;
-
-  ctx.globalCompositeOperation = small ? "source-over" : "lighter";
-  for (let i = 0; i < meridians; i++) {
-    const lon = (i / meridians) * Math.PI * 2 + spin;
-    const sn = Math.sin(lon);
-    const cn = Math.cos(lon);
-    // The wave drifts slower than the sphere turns, so the gap rolls and breathes
-    const phase = lon - spin * 0.35;
-    const crest = -0.1 + 0.2 * Math.sin(phase * 2 + t * 1.15) + 0.08 * Math.sin(phase * 3 - t * 0.7);
-    const half = 0.2 + 0.05 * Math.sin(t * 0.8 + phase);
-
-    for (let j = 2; j < points - 1; j++) {
-      const lat = -Math.PI / 2 + (j / points) * Math.PI;
-      const cl = Math.cos(lat);
-      const yy = Math.sin(lat);
-      const open = clamp((Math.abs(yy - crest) / half - 0.82) / 0.42);
-      if (open <= 0) continue;
-
-      const x = cl * sn;
-      const z0 = cl * cn;
-      const y = yy * cosT - z0 * sinT;
-      const z = yy * sinT + z0 * cosT;
-      const depth = (z + 1) / 2;
-      const light = Math.pow(depth, 1.5);
-      const rim = Math.pow(1 - Math.abs(z), 3);
-      // Fades towards the poles, where the meridians crowd together
-      const a = Math.min(1, (small ? 0.14 : 0.06) + 1.15 * light + 0.55 * rim) * open * Math.pow(cl, 0.45);
-      if (a < 0.02) continue;
-
-      const side = clamp(0.5 + 0.85 * x + 0.24 * Math.sin(t * 0.5));
-      const base = side < 0.5 ? mix(LIT, BLUE, side * 2) : mix(BLUE, MELON, Math.pow((side - 0.5) * 2, 0.7));
-      const rgb = mix(base, side > 0.62 ? PEACH : LIT, light * light * (small ? 0.12 : 0.35));
-      const r = w * (0.5 + 0.9 * depth);
-      ctx.fillStyle = `rgba(${rgb[0] | 0},${rgb[1] | 0},${rgb[2] | 0},${a.toFixed(3)})`;
-      ctx.fillRect(c + x * R - r / 2, c - y * R - r, r, r * (small ? 1.5 : 2.1));
-    }
+function paintFrame(ctx: CanvasRenderingContext2D, frame: OrbFrame, design: number, t: number) {
+  const drift = 0.14 * Math.sin(t * 0.5);
+  for (const d of frame.dots) {
+    const near = 1 - d.white;
+    const side = clamp(0.5 + (d.x / design - 0.5) * 1.5 + drift);
+    const base = side < 0.5 ? mix(LIT, BLUE, side * 2) : mix(BLUE, MELON, Math.pow((side - 0.5) * 2, 0.75));
+    const lit = mix(base, side > 0.6 ? PEACH : LIT, near * near * 0.42);
+    const k = 0.5 + 0.5 * Math.sqrt(near);
+    ctx.globalAlpha = d.a ?? 1;
+    ctx.fillStyle = `rgb(${(lit[0] * k) | 0},${(lit[1] * k) | 0},${(lit[2] * k) | 0})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fill();
   }
-  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
 }
 
-/** The orb. Live ones run at about 30 fps and pause off screen; the rest draw a single frame. */
+/** The orb. Live ones pause off screen; the rest draw a single frame. */
 export function DotOrb({ size, live = true, className }: { size: number; live?: boolean; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -80,35 +47,46 @@ export function DotOrb({ size, live = true, className }: { size: number; live?: 
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    const scale = Math.max(devicePixelRatio || 1, 3);
-    canvas.width = canvas.height = Math.round(size * scale);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    const paint = (t: number) => {
-      ctx.clearRect(0, 0, size, size);
-      drawOrb(ctx, size, t);
+    // The package ships two tuned designs, so draw the nearest one and scale it
+    const design = size < 32 ? 20 : 64;
+    const { mode, speed, opts } = resolvePreset("composing", design);
+    const scale = Math.max(devicePixelRatio || 1, 2);
+    canvas.width = canvas.height = Math.round(size * scale);
+
+    const draw = (t: number) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform((size * scale) / design, 0, 0, (size * scale) / design, 0, 0);
+      paintFrame(ctx, MODE_FRAMES[mode](design, t, opts), design, t);
     };
+
     if (!live || matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      paint(REST_TIME);
+      draw(REST_TIME);
       return;
     }
 
     let raf = 0;
-    let last = 0;
-    let visible = true;
-    const t0 = performance.now() - REST_TIME * 1000;
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
-      if (!visible || now - last < 33) return;
-      last = now;
-      paint((now - t0) / 1000);
+    let running = false;
+    const loop = () => {
+      draw((performance.now() / 1000) * speed);
+      if (running) raf = requestAnimationFrame(loop);
     };
-    paint(REST_TIME);
-    raf = requestAnimationFrame(frame);
-    const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
+    const start = () => {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(loop);
+    };
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(raf);
+    };
+
+    draw((performance.now() / 1000) * speed);
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? start() : stop()));
     io.observe(canvas);
     return () => {
-      cancelAnimationFrame(raf);
+      stop();
       io.disconnect();
     };
   }, [size, live]);
