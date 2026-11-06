@@ -27,6 +27,10 @@ vi.mock("@/lib/contract", () => ({
   createJobOnChain: m.createJobOnChain,
   completeJobOnChain: m.completeJobOnChain,
   refundJobOnChain: m.refundJobOnChain,
+  startProcessingOnChain: vi.fn(async () => "0xprocesstx"),
+  failJobOnChain: vi.fn(async () => "0xfailtx"),
+  markExpiredOnChain: vi.fn(async () => "0xexpiretx"),
+  markKeyDestroyedOnChain: vi.fn(async () => "0xdestroykeytx"),
   getJobHistory: vi.fn(async () => [
     { jobId: 1, status: "Completed", createdAt: 1, deadline: 9, completedAt: 2, expirySeconds: 120, payment: "0.5",
       fileHash: "0xf", resultHash: "0xr", attestationHash: "0xa", user: "0x00000000000000000000000000000000000000AA" },

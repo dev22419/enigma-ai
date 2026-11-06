@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { privateKeyFromEnv } from "./env";
 import { newJobKey, newKeyId } from "./crypto";
+import { markExpiredOnChain, markKeyDestroyedOnChain } from "./contract";
 import { withStore, readStore, type DestructionReceipt, type KeyRow } from "./store";
 
 export async function createKey(jobId: string, expiresAt: number): Promise<{ keyId: string; key: Buffer }> {
@@ -79,6 +80,8 @@ export async function destroyKey(jobId: string, now = Math.floor(Date.now() / 10
     const hash = receiptHash(base);
     const sig = await signReceipt(hash);
     const receipt: DestructionReceipt = { ...base, receiptHash: hash, ...sig };
+
+    await markKeyDestroyedOnChain(Number(jobId), hash).catch(() => {});
 
     await withStore((d) => {
       const row = d.keys[jobId];

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signJobCompletion } from "@/lib/oracle-signer";
-import { getJobOnChain, completeJobOnChain } from "@/lib/contract";
+import { getJobOnChain, completeJobOnChain, startProcessingOnChain, failJobOnChain } from "@/lib/contract";
 import { storeInArkiv } from "@/lib/arkiv";
 import { tokensEqual } from "@/lib/crypto";
 import { withStore, readStore } from "@/lib/store";
@@ -57,8 +57,12 @@ export async function POST(
 
   try {
     const onChainJob = await getJobOnChain(jobId);
-    if (onChainJob.status !== "Pending") {
+    if (onChainJob.status !== "Pending" && onChainJob.status !== "Processing") {
       return fail(409, `Job is ${onChainJob.status} on-chain, cannot complete`);
+    }
+
+    if (onChainJob.status === "Pending") {
+      await startProcessingOnChain(jobId).catch(() => {});
     }
 
     const arkiv = await storeInArkiv(id, body.encryptedResult, onChainJob.expirySeconds);
@@ -99,12 +103,14 @@ export async function POST(
     };
     return NextResponse.json(response);
   } catch (err) {
+    const reason = safeErrorMessage(err);
+    await failJobOnChain(jobId, reason.slice(0, 128)).catch(() => {});
     await withStore((d) => {
       if (d.jobs[id]) {
         d.jobs[id].status = "failed";
-        d.jobs[id].error = safeErrorMessage(err);
+        d.jobs[id].error = reason;
       }
     });
-    return fail(502, safeErrorMessage(err));
+    return fail(502, reason);
   }
 }
