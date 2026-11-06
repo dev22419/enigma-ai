@@ -54,7 +54,7 @@ export function JobConsole({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[10px] border border-white/10 bg-night/85 text-frost shadow-[0_0_0_1px_rgb(2_7_10/0.6),0_40px_120px_-30px_rgb(2_151_222/0.45)] backdrop-blur-md",
+        "relative overflow-hidden rounded-[8px] border border-frost/15 bg-night/90 text-frost",
         className,
       )}
       onMouseEnter={() => setPaused(true)}
