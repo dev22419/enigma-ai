@@ -45,36 +45,38 @@ The route file (`frontend/src/app/api/infer/route.ts`) carries audit comments ma
 - The backend **could** be modified to capture plaintext — it is a trust assumption, not a cryptographic guarantee
 - The 0G Router itself handles plaintext in memory (zero-retention policy, but not verifiable from outside)
 
-## Path B — Direct browser-to-TEE (production)
+## Path B — Direct browser-to-TEE (implemented)
 
-Eliminates the backend from the plaintext path entirely.
+Eliminates the backend from the plaintext path entirely. **Now shipped** alongside Path A.
 
 ### How it works
 
-0G offers an **Advanced/Direct mode** where a client connects directly to a TeeML provider, bypassing both our backend and the 0G Router:
+The browser connects directly to a TeeML provider using `@0gfoundation/0g-compute-ts-sdk`, bypassing both our backend and the 0G Router:
 
 ```
-Current (Path A):
+Path A (fallback):
   Browser → Backend (proxy) → 0G Router → TeeML Provider (TEE)
   
-Production (Path B):
+Path B (active when wallet is on 0G chain):
   Browser → TeeML Provider (TEE)   [direct, no intermediary]
   Backend → only handles: job creation, Arkiv storage, on-chain receipts
 ```
 
-### Implementation steps
+### Implementation
 
-1. **Use `@0gfoundation/0g-compute-ts-sdk` in the browser.** The SDK supports wallet-based authentication and direct provider connections. The browser funds inference per-provider on-chain and sends requests directly.
+1. **`frontend/src/lib/client/direct-tee.ts`** — Browser-side module that creates a `ZGComputeNetworkBroker` from the user's connected wallet, discovers TeeML providers from the on-chain Service contract, manages 0G Compute ledger funding, and sends inference requests directly to the provider's endpoint.
 
-2. **TLS terminates inside the TEE.** The provider's endpoint serves from within the Intel TDX enclave. The plaintext is encrypted in transit (TLS) and decrypted only inside the enclave. No intermediary sees it.
+2. **System prompt wrapping in the browser.** The `SYSTEM_PROMPTS` from `constants.ts` are used directly in the browser to build the full messages array. The backend never sees the document content or the prompt.
 
-3. **Backend becomes metadata-only.** It handles:
-   - Job creation on Whitechain (payment escrow)
-   - Storing encrypted results on Arkiv (ciphertext only)
-   - Oracle signing (attestation → on-chain receipt)
-   - It never receives, proxies, or touches plaintext at all
+3. **Wallet-based settlement.** The 0G Compute SDK handles per-provider billing on the 0G chain. The browser:
+   - Creates a ledger (deposits 0G tokens)
+   - Transfers funds to the provider's sub-account
+   - Acknowledges the provider's TEE signer
+   - Gets auth headers for each request (signed by the user's wallet)
 
-4. **Verify the provider's TEE attestation from the browser.** The SDK's `verifyService()` checks the TEE signer address and Docker Compose hash against the on-chain `Service` contract. The browser can independently confirm the provider is running a genuine enclave.
+4. **Automatic fallback.** When direct mode is unavailable (no TeeML providers found, wallet not on 0G chain), the system falls back to Path A (auditable proxy with `X-0G-Provider-Trust-Mode: private`).
+
+5. **Visual indicator.** The chat header shows "direct TEE" with a green indicator when Path B is active, vs "sealed enclave" for Path A.
 
 ### What Path B eliminates
 
@@ -89,15 +91,19 @@ Production (Path B):
 - Intel TDX hardware is secure (same as Path A)
 - The provider's TEE implementation is correct (verifiable via attestation)
 - The browser is not compromised (same as Path A)
+- TLS between browser and provider is not intercepted
 
-### Blockers for Path B
+### Files
 
-1. **Browser SDK compatibility** — The `@0gfoundation/0g-compute-ts-sdk` is designed for Node.js. Browser bundling needs verification.
-2. **Per-provider funding** — Direct mode requires on-chain funding per provider, adding UX complexity.
-3. **System prompt injection** — The browser would build the full messages array, including the system prompt. A compromised browser could modify the prompt. (This is already true for the document itself, so the trust model doesn't change.)
+| File | Role |
+|---|---|
+| `frontend/src/lib/client/direct-tee.ts` | Browser-side 0G Compute broker, provider discovery, direct inference |
+| `frontend/src/components/app/jobs.ts` | `runJob()` accepts `DirectTeeConfig`, uses direct path when available |
+| `frontend/src/components/app/chat.tsx` | Initializes direct TEE broker from wallet connector, shows mode indicator |
+| `frontend/tests/direct-tee.test.ts` | 5 tests verifying direct path bypasses backend |
 
 ## For judges
 
-> "Today, our backend is an auditable proxy: it sees the plaintext in memory, hashes it for verification, forwards it to a TeeML enclave over TLS, and discards it. It never stores, logs, or persists the document. We enforce `private` trust mode so the request only reaches sealed hardware.
+> "Our backend is an auditable proxy: it sees plaintext in memory, hashes it, forwards it to a TeeML enclave, and discards it. We enforce `private` trust mode so the request only reaches sealed hardware.
 >
-> In production, we eliminate the proxy entirely: the browser connects directly to the TEE provider using 0G's Direct mode SDK. The backend never touches plaintext at all — it only handles payment, encrypted storage, and on-chain receipts."
+> But we go further: when the user's wallet is on the 0G chain, the browser connects **directly** to the TEE provider using 0G's Compute SDK. The plaintext never touches our backend or the 0G router. The backend only handles payment escrow, encrypted storage, and on-chain receipts. Zero intermediaries in the plaintext path."
