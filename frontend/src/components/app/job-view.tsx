@@ -206,6 +206,7 @@ function Trail({ vm }: { vm: JobVM }) {
       value: vm.destruction?.receiptHash ?? null,
       state: vm.destruction ? "done" : vm.phase === "readable" ? "todo" : done(null),
     },
+    { what: "Wipe recorded on-chain", where: "Whitechain", value: vm.anchorTxHash, state: vm.anchorTxHash ? "done" : "todo" },
   ];
   return (
     <section className="mt-8">
@@ -236,7 +237,8 @@ function Trail({ vm }: { vm: JobVM }) {
 
 function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | null }) {
   const gone = vm.phase === "destroyed";
-  const valid = vm.preview ? !!vm.destruction : receipt?.destructionReceiptValid === true;
+  // Sealed once the wipe is on record: anchored on-chain, done in this browser, or the older server-signed receipt checks out.
+  const valid = vm.preview ? !!vm.destruction : !!vm.anchorTxHash || vm.destruction?.signer === "this browser" || receipt?.destructionReceiptValid === true;
   const [busy, setBusy] = useState(false);
 
   async function download() {
@@ -284,7 +286,13 @@ function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | n
               </dl>
               <div className="mt-5 flex items-end justify-between gap-3">
                 <p className="font-mono text-[9.5px] leading-relaxed text-ink-soft">
-                  {gone ? (valid ? "Destruction receipt signature verified." : "Checking the destruction receipt…") : "The seal appears once the key is destroyed."}
+                  {gone
+                    ? vm.anchorTxHash
+                      ? "Key wipe recorded on-chain."
+                      : valid
+                        ? "Key wiped in this browser. Not yet recorded on-chain."
+                        : "Waiting for the wipe to be recorded…"
+                    : "The seal appears once the key is destroyed."}
                 </p>
                 <div className={cn("transition-[opacity,transform,filter] duration-500", gone && valid ? "scale-100 opacity-100" : "scale-90 opacity-15 grayscale")}>
                   <Seal className="size-20 text-night" />
