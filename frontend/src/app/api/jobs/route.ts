@@ -6,6 +6,7 @@ import { withStore } from "@/lib/store";
 import { configProblems } from "@/lib/preflight";
 import { safeErrorMessage } from "@/lib/redact";
 import { storageConfigured, uploadCiphertext } from "@/lib/storage";
+import { verifyJobAuth } from "@/lib/job-auth";
 import type { CreateJobRequest, CreateJobResponse } from "@/lib/types";
 
 const MAX_CIPHERTEXT_CHARS = 12_000_000;
@@ -25,8 +26,8 @@ export async function POST(req: NextRequest) {
   if (!TASK_TYPES.includes(body.taskType)) {
     return fail(400, `Invalid taskType. Must be one of: ${TASK_TYPES.join(", ")}`);
   }
-  if (typeof body.fileName !== "string" || !body.fileName) {
-    return fail(400, "fileName is required");
+  if (typeof body.fileName !== "string" || !body.fileName || body.fileName.length > 200) {
+    return fail(400, "fileName is required (200 characters at most)");
   }
   if (typeof body.fileHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.fileHash)) {
     return fail(400, "fileHash must be a 0x-prefixed keccak256 hash");
@@ -47,6 +48,15 @@ export async function POST(req: NextRequest) {
   const problems = configProblems();
   if (problems.length) return fail(503, `Server is not configured: ${problems.join("; ")}`);
 
+  // Who pays. A wallet balance is only charged with that wallet's signature over this exact job.
+  // Without one, the service wallet would pay, which is for demos only and must be switched on.
+  if (body.userAddress !== undefined) {
+    const auth = await verifyJobAuth({ ...body, userAddress: body.userAddress });
+    if (!auth.ok) return fail(auth.status, auth.error);
+  } else if (process.env.ALLOW_SERVICE_PAID_JOBS !== "true") {
+    return fail(401, "Connect a wallet and sign to open a job. The service doesn't pay for jobs unless ALLOW_SERVICE_PAID_JOBS=true.");
+  }
+
   const now = () => Math.floor(Date.now() / 1000);
 
   let jobId: number;
@@ -54,6 +64,10 @@ export async function POST(req: NextRequest) {
   try {
     ({ jobId, txHash: createTxHash } = await createJobOnChain(body.fileHash, body.ttl, body.userAddress));
   } catch (err) {
+    // 0xf4d678b8 is the contract's InsufficientBalance(): the wallet hasn't deposited enough to cover the price.
+    if (/f4d678b8|InsufficientBalance/i.test(String((err as Error)?.message ?? err))) {
+      return fail(402, "This wallet doesn't have enough credit. Deposit USDT, then try again.");
+    }
     return fail(502, `Could not create the job on-chain: ${safeErrorMessage(err)}`);
   }
   const id = String(jobId);
@@ -86,6 +100,7 @@ export async function POST(req: NextRequest) {
       createdAt: now(),
       expiresAt: null,
       accessToken,
+      payer: body.userAddress?.toLowerCase(),
       inputStorage: inputStorage ?? undefined,
     };
   });

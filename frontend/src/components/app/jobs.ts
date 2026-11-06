@@ -13,10 +13,15 @@ import {
   loadWipeReceipt,
   newJobKey,
   parseEnvelope,
+  setKeyExpiry,
   storeKey,
   storeToken,
+  wipeAllKeys,
+  wipeExpiredKeys,
   wipeKey,
 } from "@/lib/client/vault";
+import { buildAuthMessage } from "@/lib/auth-message";
+import { CHAIN_ID, ENIGMA_ADDRESS } from "@/lib/client/chain";
 
 /**
  * Client side of the Enigma API (POST /api/jobs, GET /api/jobs/[id], /receipt, /balance, /history).
@@ -87,6 +92,8 @@ export interface JobVM {
   keyState: "IN_BROWSER" | "WIPED" | "NOT_HERE" | null;
   ciphertextPreview: string | null;
   destruction: Destruction | null;
+  /** The transaction that recorded the key wipe on-chain, once the server has anchored it. */
+  anchorTxHash: string | null;
 }
 
 // ------------------------------------------------------------------ local index
@@ -145,7 +152,9 @@ export function patchEntry(id: string, patch: Partial<IndexEntry>) {
   saveIndex(all.map((e) => (e.id === id ? { ...e, ...patch } : e)));
 }
 
+/** Clears the job list. Keys go first, so nothing readable outlives the list that points to it. */
 export function forgetAll() {
+  wipeAllKeys();
   saveIndex([]);
 }
 
@@ -202,9 +211,10 @@ interface StoreResultResponse {
   expiresAt: number;
 }
 
-export type Stage = "encrypt" | "create" | "infer" | "seal" | "store";
+export type Stage = "encrypt" | "authorize" | "create" | "infer" | "seal" | "store";
 export const STAGE_LABEL: Record<Stage, string> = {
   encrypt: "Encrypting in your browser",
+  authorize: "Waiting for your wallet to sign",
   create: "Opening the job on Whitechain",
   infer: "Reading inside the 0G enclave",
   seal: "Encrypting the answer in your browser",
@@ -227,30 +237,82 @@ function post<T>(url: string, body: unknown, token?: string) {
  * encrypt here, open the job with the ciphertext, read in the enclave, encrypt the answer here,
  * store that ciphertext. The key never leaves this tab.
  */
+/** A wallet that can pay: its address, the current query price, and a way to ask it to sign. */
+export interface Payer {
+  address: string;
+  price: string;
+  sign: (message: string) => Promise<string>;
+}
+
+/**
+ * The server never needs to know what a document is called ("patient_jane_doe_labs.pdf" is itself sensitive).
+ * It only uses the extension, to tell an image from text, so that is all it gets.
+ */
+export function neutralFileName(name: string) {
+  const ext = name.match(/\.(png|jpe?g|gif|webp)$/i)?.[0].toLowerCase();
+  return ext ? `image${ext}` : "document.txt";
+}
+
 export async function runJob(
   input: { taskType: Task; ttl: number; fileName: string; content: string },
   onStage: (s: Stage) => void,
+  onCreated?: (jobId: string) => void,
+  payer?: Payer,
 ): Promise<{ jobId: string; expiresAt: number; result: string }> {
   onStage("encrypt");
+  const fileName = neutralFileName(input.fileName);
   const fileHash = hashText(input.content);
   const { key, keyId } = await newJobKey();
   const encryptedFile = await encryptText(key, keyId, input.content, { objectType: "input", fileHash });
+
+  // A wallet pays only by signing this exact job: this document, this lifespan, this price, once.
+  let auth: { userAddress: string; signature: string; nonce: string; validUntil: number } | null = null;
+  if (payer) {
+    onStage("authorize");
+    const nonce = `0x${Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")}`;
+    const validUntil = Math.floor(Date.now() / 1000) + 300;
+    const message = buildAuthMessage({
+      userAddress: payer.address,
+      fileHash,
+      ttl: input.ttl,
+      price: payer.price,
+      validUntil,
+      nonce,
+      contract: ENIGMA_ADDRESS,
+      chainId: CHAIN_ID,
+    });
+    auth = { userAddress: payer.address, signature: await payer.sign(message), nonce, validUntil };
+  }
 
   onStage("create");
   const created = await post<CreateJobResponse>("/api/jobs", {
     taskType: input.taskType,
     ttl: input.ttl,
-    fileName: input.fileName,
+    fileName,
     fileHash,
     encryptedFile,
+    ...(auth ?? {}),
   });
   const jobId = created.jobId;
-  await storeKey(jobId, key, keyId);
+  // Provisional deadline: the requested lifespan from now, plus a small margin for the remaining steps.
+  await storeKey(jobId, key, keyId, Math.floor(Date.now() / 1000) + input.ttl + 120);
   storeToken(jobId, created.accessToken);
+  // Record the job right away, so it can always be found (and its key wiped) even if the tab closes mid-run.
+  onCreated?.(jobId);
 
   try {
     onStage("infer");
-    const inf = await post<InferResponse>("/api/infer", { taskType: input.taskType, content: input.content, fileName: input.fileName });
+    // 0G's providers occasionally drop a request. Another try is safe (the server allows three per job).
+    let inf: InferResponse | null = null;
+    for (let attempt = 1; !inf; attempt++) {
+      try {
+        inf = await post<InferResponse>("/api/infer", { jobId, taskType: input.taskType, content: input.content, fileName }, created.accessToken);
+      } catch (e) {
+        const retryable = e instanceof ApiError && e.status === 502 && attempt < 3;
+        if (!retryable) throw e;
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+      }
+    }
 
     onStage("seal");
     const encryptedResult = await encryptText(key, keyId, inf.result, { jobId, objectType: "result" });
@@ -261,6 +323,7 @@ export async function runJob(
       { encryptedResult, resultHash: inf.resultHash, attestationHash: inf.attestationHash, chatId: inf.chatId },
       created.accessToken,
     );
+    setKeyExpiry(jobId, stored.expiresAt);
     fresh.set(jobId, inf.result);
     return { jobId, expiresAt: stored.expiresAt * 1000, result: inf.result };
   } catch (e) {
@@ -291,6 +354,8 @@ type ApiJob = {
   encryptedResult: string | null;
   arkivEntityExists: boolean;
   destruction: (Omit<Destruction, "valid"> & { valid?: boolean }) | null;
+  /** The browser's key-wipe receipt, anchored on-chain by the server. */
+  keyWipe: { receiptHash: string; destructionTimestamp: number; anchorTxHash: string } | null;
 };
 
 export type ApiReceipt = {
@@ -321,7 +386,7 @@ function phaseOf(j: ApiJob, now: number, plain: string | null, wiped: boolean, h
   if (j.status === "Refunded") return "refunded";
   // The 8-state contract reports these directly, so don't wait for the clock or the stuck timeout.
   if (j.status === "Failed") return "failed";
-  if (j.status === "Expired" || j.status === "KeyDestroyed") return "destroyed";
+  if (j.status === "Expired" || j.status === "KeyDestroyed" || j.keyWipe) return "destroyed";
   const exp = j.expiresAt ? j.expiresAt * 1000 : null;
   if (wiped || (exp && now >= exp)) return "destroyed";
   if (j.status === "Completed") return plain ? "readable" : held ? "working" : "locked";
@@ -360,9 +425,12 @@ function fromApi(j: ApiJob, entry: IndexEntry | undefined, now: number, plain: s
     ciphertextPreview: env ? env.ct.slice(0, 160) : null,
     destruction: wipe
       ? { destructionTimestamp: wipe.destructionTimestamp, receiptHash: wipe.receiptHash, signer: "this browser", valid: true }
-      : j.destruction
-        ? { ...j.destruction, valid: j.destruction.valid ?? null }
-        : null,
+      : j.keyWipe
+        ? { destructionTimestamp: j.keyWipe.destructionTimestamp, receiptHash: j.keyWipe.receiptHash, signer: "a browser", valid: true }
+        : j.destruction
+          ? { ...j.destruction, valid: j.destruction.valid ?? null }
+          : null,
+    anchorTxHash: j.keyWipe?.anchorTxHash ?? null,
   };
 }
 
@@ -516,6 +584,7 @@ function fromPreview(e: IndexEntry, now: number): JobVM {
       phase === "destroyed"
         ? { destructionTimestamp: Math.floor(exp / 1000), receiptHash: h.receiptHash ?? "", signer: "0x279eBb05E158315Bb92e9749b8BA45c17992B37e", valid: true }
         : null,
+    anchorTxHash: phase === "destroyed" ? h.completeTxHash ?? null : null,
   };
 }
 
@@ -604,14 +673,66 @@ export async function tryDecrypt(id: string): Promise<{ ok: true } | { ok: false
   }
 }
 
-/** Wipes the keys of every job in this browser whose lifespan has ended (task #74). */
+/**
+ * Wipes every expired key in this browser session (task #74). It reads the keys' own deadlines
+ * from storage, so a key is wiped even if its job is missing from the list. Arkiv's expiry, when
+ * known on the list, also counts.
+ */
 export function wipeExpired(all: IndexEntry[], now: number) {
-  let wiped = 0;
+  let wiped = wipeExpiredKeys(Math.floor(now / 1000));
   for (const e of all) {
     if (e.preview || !e.expiresAt || now < e.expiresAt) continue;
     if (hasKey(e.id) && wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
   }
+  anchorPendingWipes(all);
   return wiped;
+}
+
+const anchoring = new Set<string>();
+const lastTry = new Map<string, number>();
+
+/**
+ * Sends each wipe receipt to the server once, so the contract records that the key was destroyed (task board #75).
+ * Needs the job's access token, which lives in this session. A failure is retried on the next tick.
+ * Preview jobs are never anchored: they have no job on-chain.
+ */
+export function anchorPendingWipes(all: IndexEntry[]) {
+  for (const e of all) {
+    if (e.preview || anchoring.has(e.id)) continue;
+    const receipt = loadWipeReceipt(e.id);
+    const token = loadToken(e.id);
+    if (!receipt || !token || localStorage.getItem(`enigma.anchored.${e.id}`)) continue;
+    // At most one try every 10 seconds per job, so a failing server isn't hammered once a second.
+    if (Date.now() - (lastTry.get(e.id) ?? 0) < 10000) continue;
+    lastTry.set(e.id, Date.now());
+    anchoring.add(e.id);
+    post<{ receiptHash: string; anchorTxHash: string }>(
+      `/api/jobs/${e.id}/destroyed`,
+      { keyId: receipt.keyId, expiryTimestamp: receipt.expiryTimestamp, destructionTimestamp: receipt.destructionTimestamp, status: "wiped" },
+      token,
+    )
+      .then(() => {
+        try {
+          localStorage.setItem(`enigma.anchored.${e.id}`, "1");
+        } catch {
+          /* it will just be retried, and the server answers idempotently */
+        }
+      })
+      .catch((err) => {
+        // Final answers: the job never completed (409), or the server no longer knows the token because it was
+        // already anchored and scrubbed (403) or the job is gone (404). Anything else (not expired on-chain yet,
+        // network trouble) is retried.
+        const final = err instanceof ApiError && (err.status === 403 || err.status === 404 || (err.status === 409 && /Only a completed job/.test(err.message)));
+        if (final) {
+          try {
+            localStorage.setItem(`enigma.anchored.${e.id}`, "n/a");
+          } catch {
+            /* ignore */
+          }
+        }
+      })
+      .finally(() => anchoring.delete(e.id));
+  }
 }
 
 /** Index entries with a cheap local phase, for lists. */

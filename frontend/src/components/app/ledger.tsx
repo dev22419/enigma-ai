@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useAccount } from "wagmi";
 import { loadWipeReceipt } from "@/lib/client/vault";
+import { DepositFlow, useMounted } from "./wallet";
 import { cn } from "@/lib/utils";
 import { Fuse, TaskChip } from "./bits";
 import { ApiError, countdown, forgetAll, getBalance, knownAddress, localPhase, short, ttlLabel, useIndex, useNow, type Phase } from "./jobs";
@@ -37,7 +39,10 @@ type Row = {
 export function Ledger() {
   const index = useIndex();
   const now = useNow();
-  const address = knownAddress(index);
+  const { address: wallet } = useAccount();
+  const mounted = useMounted();
+  // The connected wallet wins; otherwise fall back to the wallet that paid for jobs started in this browser.
+  const address = (mounted ? wallet : undefined) ?? knownAddress(index);
   const [balance, setBalance] = useState<{ balance: string; queryPrice: string; queriesRemaining: number } | null>(null);
   const [history, setHistory] = useState<HistoryJob[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +120,10 @@ export function Ledger() {
       </dl>
 
       {error && <p className="mt-4 font-mono text-[12px] text-melon">Couldn&rsquo;t load on-chain data: {error}</p>}
+
+      <div className="mt-8 max-w-[34rem]">
+        <DepositFlow />
+      </div>
 
       <h2 className="mt-12 text-[15px] font-semibold">All jobs</h2>
       {rows.length === 0 ? (

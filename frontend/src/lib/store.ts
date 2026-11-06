@@ -34,6 +34,15 @@ export interface JobRow {
   // Set by the refund worker for jobs that failed after payment was locked.
   refund?: { state: "REFUNDED" | "NOT_REQUIRED"; txHash: string | null; at: number } | null;
   accessToken?: string;
+  // Wallet that paid for the job (createJobFor), when one signed for it.
+  payer?: string;
+  // The enclave's answer for this job, recorded by /api/infer. The result route only accepts these values.
+  inferred?: { resultHash: string; attestationHash: string; chatId: string; at: number };
+  // Set while an inference is running, and counts tries, so one paid job can't be used to spend unlimited 0G credit.
+  inferring?: number;
+  inferAttempts?: number;
+  // The browser's key-wipe receipt, anchored on-chain by /api/jobs/[id]/destroyed.
+  keyWipe?: { receiptHash: string; destructionTimestamp: number; anchorTxHash: string };
 }
 
 export interface DestructionReceipt {
@@ -52,6 +61,8 @@ interface Data {
   keys: Record<string, KeyRow>;
   jobs: Record<string, JobRow>;
   receipts: Record<string, DestructionReceipt>;
+  // Digest of each used wallet authorization -> the time it stops being valid (replay protection).
+  auth?: Record<string, number>;
 }
 
 // Keys live in their own collection, apart from job metadata, so a key row can

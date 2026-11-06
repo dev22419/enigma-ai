@@ -111,9 +111,23 @@ function session(): Storage | null {
   }
 }
 
-export async function storeKey(jobId: string, key: CryptoKey, keyId: string) {
+/** Stores the key with the time it must be gone by (seconds). The wiper uses this, not the job list. */
+export async function storeKey(jobId: string, key: CryptoKey, keyId: string, expiresAt: number) {
   const jwk = await crypto.subtle.exportKey("jwk", key);
-  session()?.setItem(KEY_PREFIX + jobId, JSON.stringify({ keyId, jwk }));
+  session()?.setItem(KEY_PREFIX + jobId, JSON.stringify({ keyId, jwk, expiresAt }));
+}
+
+/** Moves a key's deadline to the real one once Arkiv reports it. Never extends past what's stored if later. */
+export function setKeyExpiry(jobId: string, expiresAt: number) {
+  const s = session();
+  const raw = s?.getItem(KEY_PREFIX + jobId);
+  if (!raw) return;
+  try {
+    const row = JSON.parse(raw) as { keyId: string; jwk: JsonWebKey; expiresAt?: number };
+    s?.setItem(KEY_PREFIX + jobId, JSON.stringify({ ...row, expiresAt }));
+  } catch {
+    /* unreadable row: leave it for the wiper */
+  }
 }
 
 /** The job's key, if this browser session still holds it. */
@@ -121,12 +135,52 @@ export async function loadKey(jobId: string): Promise<{ key: CryptoKey; keyId: s
   const raw = session()?.getItem(KEY_PREFIX + jobId);
   if (!raw) return null;
   try {
-    const { keyId, jwk } = JSON.parse(raw) as { keyId: string; jwk: JsonWebKey };
+    const { keyId, jwk, expiresAt } = JSON.parse(raw) as { keyId: string; jwk: JsonWebKey; expiresAt?: number };
+    // Fail closed: a key past its deadline is wiped on sight, never used.
+    if (!expiresAt || Date.now() / 1000 >= expiresAt) {
+      wipeKey(jobId, expiresAt ?? Math.floor(Date.now() / 1000));
+      return null;
+    }
     const key = await crypto.subtle.importKey("jwk", jwk, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
     return { key, keyId };
   } catch {
     return null;
   }
+}
+
+/** Every job id whose key this session holds, read from storage itself (not from the job list). */
+function heldJobIds(): string[] {
+  const s = session();
+  if (!s) return [];
+  const ids: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const k = s.key(i);
+    if (k?.startsWith(KEY_PREFIX)) ids.push(k.slice(KEY_PREFIX.length));
+  }
+  return ids;
+}
+
+/** Wipes every key whose deadline has passed, or that has no readable deadline (task #74, fail closed). */
+export function wipeExpiredKeys(nowSec = Math.floor(Date.now() / 1000)) {
+  let wiped = 0;
+  for (const id of heldJobIds()) {
+    let exp: number | undefined;
+    try {
+      exp = (JSON.parse(session()?.getItem(KEY_PREFIX + id) ?? "{}") as { expiresAt?: number }).expiresAt;
+    } catch {
+      exp = undefined;
+    }
+    if (!exp || nowSec >= exp) {
+      if (wipeKey(id, exp ?? nowSec)) wiped++;
+    }
+  }
+  return wiped;
+}
+
+/** Wipes every key in this session, e.g. when the user clears their job list. */
+export function wipeAllKeys() {
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (const id of heldJobIds()) wipeKey(id, nowSec);
 }
 
 export function hasKey(jobId: string) {
