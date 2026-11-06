@@ -152,8 +152,8 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
       <div className="relative mt-6 border-t border-night-line p-5 sm:p-7">
         {!gone && vm.result && (
           <div className="grid gap-6 md:grid-cols-2">
-            {sections(vm.result).map((s, i) => (
-              <div key={i} className={cn(i === 0 && "md:col-span-2")}>
+            {sections(vm.result).map((s, i, all) => (
+              <div key={i} className={cn((i === 0 || (i === all.length - 1 && i % 2 === 1)) && "md:col-span-2")}>
                 {s.title && <h3 className="text-[13px] font-semibold text-volt-lit">{s.title}</h3>}
                 <ul className="mt-2 space-y-1.5">
                   {s.items.map((it, j) => (

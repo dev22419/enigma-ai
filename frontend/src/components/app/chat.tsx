@@ -348,7 +348,7 @@ function TimerWheel({ value, onChange, presets }: { value: number; onChange: (tt
   return (
     <Popover.Root open={editing} onOpenChange={setEditing}>
       <div className="flex min-w-0 items-center gap-1.5 pl-1 text-[13.5px]">
-        <span className="shrink-0 text-frost/60">Destroy after</span>
+        <span className="shrink-0 text-frost/60 max-[379px]:hidden">Destroy after</span>
         <Popover.Anchor asChild>
           <div
             ref={box}
