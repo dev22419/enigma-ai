@@ -142,7 +142,7 @@ export function Ledger() {
   ];
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-frost/[0.07] pb-4">
         <div>
           <p className="font-mono text-[11.5px] text-frost-soft">Workspace / Ledger</p>
@@ -158,7 +158,7 @@ export function Ledger() {
 
       <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-[14px] bg-frost/[0.07] lg:grid-cols-4">
         {stats.map(([label, value, note, tone]) => (
-          <div key={label} className="bg-[#0a0a0a] p-4">
+          <div key={label} className="bg-[#242424]/90 p-4">
             <dt className="text-[12.5px] text-frost-soft">{label}</dt>
             <dd className="mt-2 flex items-baseline gap-2">
               <span className={cn("num text-[26px] leading-none font-semibold tracking-[-0.02em]", tone)}>{value}</span>
@@ -184,7 +184,7 @@ export function Ledger() {
                   onClick={() => setFilter(on ? null : f.key)}
                   aria-pressed={on}
                   className={cn(
-                    "rounded-[14px] bg-[#0a0a0a] p-4 text-left shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] transition-shadow hover:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.2)]",
+                    "rounded-[14px] bg-[#242424]/70 p-4 text-left backdrop-blur-md shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] transition-shadow hover:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.2)]",
                     on && "shadow-[inset_0_0_0_1px_rgb(255_255_255/0.5)]",
                   )}
                 >
@@ -217,7 +217,7 @@ export function Ledger() {
               )}
             </div>
           ) : (
-            <div className="mt-3 overflow-x-auto rounded-[14px] bg-[#0a0a0a] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]">
+            <div className="mt-3 overflow-x-auto rounded-[14px] bg-[#242424]/70 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] backdrop-blur-md">
               <table className="w-full min-w-[40rem] text-left text-[13.5px]">
                 <thead className="text-[12px] text-frost-soft">
                   <tr>

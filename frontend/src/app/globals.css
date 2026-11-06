@@ -449,67 +449,30 @@ body {
 }
 
 /* ---------------------------------------------------------------- app */
-/* The app runs on true black with neutral greys; Electric Blue and Cantaloupe are the only colours */
+/* The app: neutral charcoal with a clean grotesk, floating over the wave */
 .app-theme {
-  --night: #000;
-  --night-2: #0c0c0c;
-  --night-3: #161616;
-  --night-line: rgb(255 255 255 / 0.09);
-  --frost: #f2f5f7;
-  --frost-soft: #9a9ea3;
-  --color-night: #000;
-  --color-night-2: #0c0c0c;
-  --color-night-3: #161616;
-  --color-night-line: rgb(255 255 255 / 0.09);
-  --color-frost: #f2f5f7;
-  --color-frost-soft: #9a9ea3;
+  --night: #1c1c1c;
+  --night-2: #242424;
+  --night-3: #2e2e2e;
+  --night-line: rgb(255 255 255 / 0.1);
+  --frost: #f5f5f5;
+  --frost-soft: #a8a8a8;
+  --color-night: #1c1c1c;
+  --color-night-2: #242424;
+  --color-night-3: #2e2e2e;
+  --color-night-line: rgb(255 255 255 / 0.1);
+  --color-frost: #f5f5f5;
+  --color-frost-soft: #a8a8a8;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
 }
-@property --beam-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
+.app-theme .display {
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
-@keyframes beam-spin {
-  to {
-    --beam-angle: 360deg;
-  }
-}
-/* A point of light riding the composer's border, with a soft glow behind it */
-.beam {
-  position: relative;
-  isolation: isolate;
-  border-radius: 20px;
-  background: #0c0c0c;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
-}
-.beam::before,
-.beam::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  border-radius: inherit;
-  background: conic-gradient(from var(--beam-angle), transparent 0 58%, #0297de 70%, #5cc4ff 76%, #fc734d 86%, transparent 96%);
-  animation: beam-spin 5.5s linear infinite;
-}
-.beam::before {
-  inset: 0;
-  padding: 1.5px;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-.beam::after {
-  inset: -2px;
-  z-index: -1;
-  filter: blur(22px);
-  opacity: 0.2;
-}
-.beam:focus-within::before,
-.beam:focus-within::after {
-  animation-duration: 2.6s;
-}
-.beam:focus-within::after {
-  opacity: 0.26;
+.app-theme * {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
 }
 .live-dot {
   animation: live-dot 1.6s ease-in-out infinite;
@@ -520,8 +483,6 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .beam::before,
-  .beam::after,
   .live-dot {
     animation: none;
   }

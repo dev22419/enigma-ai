@@ -11,7 +11,8 @@ import { useSignMessage } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
 import { cn } from "@/lib/utils";
-import { DotOrb, EnclaveOrb, OrbMark } from "./orb";
+import { DotOrb, OrbMark } from "./orb";
+import { useFullWave } from "./wave";
 import { ConnectPill, useGate, type Gate } from "./wallet";
 import {
   ApiError,
@@ -108,6 +109,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
   );
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
+  useFullWave(empty);
   // Real jobs are paid from the connected wallet's balance, by its signature. Previews and demo mode skip this.
   const { gate, credit } = useGate(threadPreview);
   const { signMessageAsync } = useSignMessage();
@@ -206,43 +208,42 @@ export function Chat({ samples }: { samples: Sample[] }) {
   );
 
   return (
-    <div className="flex min-h-dvh flex-col lg:h-dvh">
-      <header className="flex h-14 shrink-0 items-center gap-3 px-5 sm:px-8">
-        <p className="min-w-0 truncate text-[13.5px] text-frost/60">{jobs[0]?.fileName ?? pending[0]?.out.label ?? ""}</p>
-        {threadPreview && (
-          <span className="shrink-0 text-[12px] text-melon" title="The server isn't configured, so answers are simulated in this browser">
-            Preview
-          </span>
-        )}
-        <span className="ml-auto flex shrink-0 items-center gap-2 text-[12px] text-frost-soft/70 max-sm:hidden">
-          <span className="size-1.5 rounded-full bg-volt-lit shadow-[0_0_8px_#5cc4ff]" />
-          0gm-1.0-35b-a3b, sealed enclave{SERVICE_PAID ? ", demo mode" : ""}
-        </span>
-      </header>
+    <div className="flex h-full flex-col">
+      {!empty && (
+        <header className="flex h-12 shrink-0 items-center gap-3 px-5 sm:px-8">
+          <p className="min-w-0 truncate text-[14px] text-frost/70">{jobs[0]?.fileName ?? pending[0]?.out.label ?? ""}</p>
+          {threadPreview && (
+            <span className="shrink-0 text-[12px] text-melon" title="The server isn't configured, so answers are simulated in this browser">
+              Preview
+            </span>
+          )}
+          <span className="ml-auto shrink-0 text-[12.5px] text-frost-soft max-sm:hidden">Sealed enclave{SERVICE_PAID ? ", demo mode" : ""}</span>
+        </header>
+      )}
 
       {empty ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-5 pb-24 sm:px-8">
-          <div className="rise w-full max-w-[640px]">
-            <EnclaveOrb />
-            <h1 className="mt-8 text-[28px] leading-tight font-semibold tracking-[-0.02em]">Private by default.</h1>
-            <p className="mt-2 text-[15px] leading-relaxed text-frost/55">
-              Add a document. It&rsquo;s read inside a sealed enclave, and the answer becomes unreadable when its timer ends.
+        <div className="flex min-h-full flex-1 flex-col px-5 sm:px-8">
+          <div className="rise mx-auto flex w-full max-w-[640px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
+            <p className="inline-flex items-center gap-2 rounded-full bg-black/25 py-1 pr-3 pl-1 text-[13px] text-frost/90 backdrop-blur-sm">
+              <span className="rounded-full bg-[#4775e7] px-2 py-0.5 text-[12px] font-medium text-white">Private</span>
+              Encrypted before it leaves your browser
             </p>
-            <div className="mt-8">{composer}</div>
-            {samples.length > 0 && (
-              <p className="mt-5 text-[13px] leading-loose text-frost-soft/70">
-                Try a fictional sample:{" "}
-                {samples.map((s, i) => (
-                  <span key={s.key}>
-                    <button onClick={() => pickSample(s)} className="text-frost/80 underline decoration-frost/20 underline-offset-4 transition-colors hover:text-frost hover:decoration-volt-lit">
-                      {s.label.toLowerCase()}
-                    </button>
-                    {i < samples.length - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </p>
-            )}
+            <h1 className="mt-4 text-[clamp(1.75rem,3.2vw,2.5rem)] leading-tight font-semibold tracking-[-0.03em]">What should Enigma read?</h1>
+            <div className="mt-6 w-full text-left">{composer}</div>
           </div>
+          {samples.length > 0 && (
+            <section className="mx-auto w-full max-w-[920px] rounded-t-[16px] bg-[#1a100f]/90 p-4 pb-5 backdrop-blur-md">
+              <h2 className="text-[14px] font-medium">Try a fictional sample</h2>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {samples.map((s) => (
+                  <button key={s.key} onClick={() => pickSample(s)} className="flex flex-col items-start rounded-xl bg-frost/[0.06] p-3 text-left transition-colors hover:bg-frost/[0.11]">
+                    <span className="block text-[14px] font-medium">{s.label}</span>
+                    <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-frost-soft">{s.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       ) : (
         <>
@@ -257,7 +258,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
               <div ref={bottom} />
             </div>
           </div>
-          <div className="shrink-0 bg-[linear-gradient(180deg,rgb(2_7_10/0),var(--night)_35%)] px-5 pt-4 pb-5 sm:px-8">
+          <div className="shrink-0 px-5 pt-3 pb-5 sm:px-8">
             <div className="mx-auto max-w-[680px]">{composer}</div>
           </div>
         </>
@@ -270,9 +271,9 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
   return (
-    <label className="relative flex items-center gap-1 rounded-full bg-frost/[0.06] py-1 pr-2 pl-3 text-[13px] text-frost/75 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-colors hover:bg-frost/[0.1] hover:text-frost">
+    <label className="relative flex min-w-0 items-center gap-1 rounded-lg py-1 pr-2 pl-2 text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
       <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="cursor-pointer appearance-none bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
         {children}
       </select>
       <ChevronDown className="pointer-events-none absolute right-1.5 size-3.5 opacity-60" />
@@ -363,7 +364,7 @@ function Composer({
   return (
     <div>
       <div
-        className="beam"
+        className="rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)]"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -397,7 +398,7 @@ function Composer({
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
           <button
             onClick={() => file.current?.click()}
-            className="grid size-[30px] place-items-center rounded-full bg-frost/[0.06] text-frost/70 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-colors hover:bg-frost/[0.1] hover:text-frost"
+            className="grid size-8 place-items-center rounded-lg text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
             aria-label="Attach a text file or image"
             title="Attach a text file or image"
           >
@@ -426,7 +427,7 @@ function Composer({
               disabled={!canSend}
               aria-label="Send"
               className={cn(
-                "grid size-8 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-melon disabled:bg-frost/15 disabled:text-frost/40",
+                "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-melon disabled:bg-frost/15 disabled:text-frost/40",
                 !(gate.kind === "ok" && gate.price) && "ml-auto",
               )}
             >

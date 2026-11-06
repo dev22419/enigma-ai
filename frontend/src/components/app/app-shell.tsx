@@ -1,15 +1,16 @@
 // AI-assisted: Used Claude to write this file.
 "use client";
 
-import { LayoutGrid, MessageSquare, SquarePen } from "lucide-react";
+import { House, LayoutGrid, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { Logo } from "@/components/landing/site-nav";
 import { cn } from "@/lib/utils";
 import { countdown, localPhase, threadsOf, useIndex, useNow, wipeExpired, type Thread } from "./jobs";
 import { WalletBox } from "./wallet";
+import { Wave, WaveContext } from "./wave";
 
 /** Wipes each job's key from this browser the moment its lifespan ends (task #74). */
 function KeyWiper() {
@@ -24,18 +25,20 @@ function KeyWiper() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [full, setFull] = useState(false);
   return (
-    <>
-    <KeyWiper />
-    <div className="app-theme flex min-h-dvh flex-col bg-night text-frost lg:flex-row">
-      <Suspense fallback={<aside className="shrink-0 lg:w-[calc(56px+15.5rem)]" />}>
-        <Sidebar />
-      </Suspense>
-      <div className="relative min-w-0 flex-1">
-        <div className="relative">{children}</div>
+    <WaveContext.Provider value={setFull}>
+      <KeyWiper />
+      <div className="app-theme flex h-dvh flex-col bg-[#0c0c0c] text-frost lg:flex-row lg:p-1.5 lg:pl-0">
+        <Suspense fallback={<aside className="shrink-0 lg:w-[15rem]" />}>
+          <Sidebar />
+        </Suspense>
+        <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden lg:rounded-[14px]">
+          <Wave full={full} />
+          <div className="relative h-full overflow-y-auto">{children}</div>
+        </main>
       </div>
-    </div>
-    </>
+    </WaveContext.Provider>
   );
 }
 
@@ -62,47 +65,40 @@ function Sidebar() {
     else groups.push([label, [t]]);
   }
 
-  const onChat = path === "/chat" || path.startsWith("/job");
-  const rail: [string, string, typeof MessageSquare, boolean][] = [
-    ["/chat", "Chat", MessageSquare, onChat],
+  const nav: [string, string, typeof House, boolean][] = [
+    ["/chat", "Home", House, path === "/chat" || path.startsWith("/job")],
     ["/dashboard", "Ledger", LayoutGrid, path === "/dashboard"],
   ];
 
   return (
-    <div className="flex shrink-0 lg:sticky lg:top-0 lg:h-dvh">
-      <nav aria-label="Workspace" className="hidden w-14 flex-col items-center gap-1 border-r border-frost/[0.07] py-3 lg:flex">
-        <Link href="/" aria-label="Enigma home" className="mb-3 grid size-9 place-items-center [&_span>span]:hidden">
-          <Logo />
+    <aside className="flex shrink-0 flex-col px-2.5 max-lg:pb-2 lg:h-full lg:w-[15rem]">
+      <div className="flex h-12 items-center justify-between px-2">
+        <Link href="/" aria-label="Enigma home" className="opacity-90 transition-opacity hover:opacity-100">
+          <Logo className="[&_span]:text-[16px]" />
         </Link>
-        {rail.map(([href, label, Icon, on]) => (
-          <Link
-            key={href}
-            href={href}
-            aria-label={label}
-            title={label}
-            className={cn("relative grid size-9 place-items-center rounded-[10px] transition-colors", on ? "bg-frost/[0.09] text-frost" : "text-frost/50 hover:bg-frost/[0.05] hover:text-frost")}
-          >
-            {on && <i className="absolute top-2 -left-[10px] h-5 w-[3px] rounded-r-full bg-melon" />}
-            <Icon className="size-[18px]" strokeWidth={1.7} />
-          </Link>
-        ))}
-      </nav>
-    <aside className="flex min-w-0 flex-1 flex-col border-frost/[0.07] max-lg:border-b lg:w-[15.5rem] lg:flex-none lg:border-r">
-      <div className="flex h-14 items-center justify-between px-4">
-        <Link href="/" aria-label="Enigma home" className="opacity-90 transition-opacity hover:opacity-100 lg:hidden">
-          <Logo className="[&_span]:text-[17px]" />
-        </Link>
-        <p className="text-[14px] font-semibold max-lg:hidden">Conversations</p>
-        <Link href="/chat" aria-label="New conversation" title="New conversation" className="grid size-8 place-items-center rounded-md text-frost/60 transition-colors hover:bg-frost/[0.06] hover:text-frost">
-          <SquarePen className="size-[17px]" strokeWidth={1.75} />
+        <Link href="/chat" aria-label="New conversation" title="New conversation" className="grid size-8 place-items-center rounded-lg text-frost/60 transition-colors hover:bg-frost/[0.07] hover:text-frost">
+          <SquarePen className="size-[16px]" strokeWidth={1.75} />
         </Link>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-4 max-lg:hidden">
+      <nav aria-label="Workspace" className="mt-1 flex gap-0.5 lg:flex-col">
+        {nav.map(([href, label, Icon, on]) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn("flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px] transition-colors", on ? "bg-frost/[0.1] text-frost" : "text-frost/65 hover:bg-frost/[0.05] hover:text-frost")}
+          >
+            <Icon className="size-[15px]" strokeWidth={1.8} />
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="mt-5 min-h-0 flex-1 overflow-y-auto pb-4 max-lg:hidden">
         {index && threads.length === 0 && <p className="px-2 text-[13px] leading-relaxed text-frost-soft/60">Conversations appear here with the time their answers have left.</p>}
         {groups.map(([label, list]) => (
           <div key={label} className="mb-5">
-            <p className="px-2 pb-1 text-[11.5px] text-frost-soft/50">{label}</p>
+            <p className="px-2.5 pb-1 text-[12.5px] text-frost-soft">{label}</p>
             <ul>
               {list.map((t) => {
                 const phases = t.jobs.map((j) => (now ? localPhase(j, now) : "working"));
@@ -113,7 +109,7 @@ function Sidebar() {
                     <Link
                       href={`/chat?t=${t.id}`}
                       className={cn(
-                        "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13.5px] transition-colors",
+                        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[14px] transition-colors",
                         current === t.id ? "bg-frost/[0.07] text-frost" : "text-frost/70 hover:bg-frost/[0.04] hover:text-frost",
                       )}
                     >
@@ -132,22 +128,9 @@ function Sidebar() {
         ))}
       </div>
 
-      <div className="space-y-0.5 border-frost/[0.07] px-2 py-3 max-lg:flex max-lg:gap-1 max-lg:space-y-0 max-lg:pt-0 lg:border-t">
-        {[
-          ["/chat", "Chat", path === "/chat" || path.startsWith("/job")],
-          ["/dashboard", "Ledger", path === "/dashboard"],
-        ].map(([href, label, on]) => (
-          <Link
-            key={href as string}
-            href={href as string}
-            className={cn("block rounded-md px-2 py-1.5 text-[13.5px] transition-colors lg:hidden", on ? "text-frost" : "text-frost/55 hover:text-frost")}
-          >
-            {label}
-          </Link>
-        ))}
+      <div className="mb-1.5 rounded-xl bg-frost/[0.05] p-2 max-lg:hidden">
         <WalletBox />
       </div>
     </aside>
-    </div>
   );
 }
