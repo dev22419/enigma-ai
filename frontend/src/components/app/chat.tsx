@@ -12,17 +12,19 @@ import { EnclaveOrb, OrbMark } from "./orb";
 import {
   ApiError,
   TTL_OPTIONS,
+  STAGE_LABEL,
   countdown,
-  createJob,
   createPreview,
   newThreadId,
   remember,
+  runJob,
   sections,
   ttlLabel,
   useIndex,
   useJobVM,
   useNow,
   type IndexEntry,
+  type Stage,
   type Task,
 } from "./jobs";
 
@@ -36,15 +38,6 @@ const TASKS: { key: Task; name: string }[] = [
 
 const LIFESPANS = [{ label: "5 min", ttl: 300 }, ...TTL_OPTIONS].sort((a, b) => a.ttl - b.ttl);
 
-const SERVER_STEPS = [
-  "Locking the price on Whitechain",
-  "Encrypting with a one-time key",
-  "Storing the encrypted copy",
-  "Reading inside the 0G enclave",
-  "Checking the attestation",
-  "Storing the encrypted answer",
-  "Recording the job on Whitechain",
-];
 
 const MAX_CHARS = 8_000_000;
 const TEXT_EXT = /\.(txt|md|csv|json|log|xml|html?)$/i;
@@ -52,7 +45,7 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
 type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number };
 type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
-type Pending = { key: string; thread: string; out: Outgoing; started: number; error: ApiError | null };
+type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null };
 type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
 
 /** Wall-clock time for event handlers (kept out of render). */
@@ -127,7 +120,9 @@ export function Chat({ samples }: { samples: Sample[] }) {
     if (!t) return;
     const at = stamp();
     const key = retryKey ?? `p-${at}`;
-    setPending((p) => (retryKey ? p.map((x) => (x.key === key ? { ...x, error: null, started: at } : x)) : [...p, { key, thread: t, out, started: at, error: null }]));
+    setPending((p) =>
+      retryKey ? p.map((x) => (x.key === key ? { ...x, error: null, started: at, stage: "encrypt" } : x)) : [...p, { key, thread: t, out, started: at, stage: "encrypt", error: null }],
+    );
 
     if (asPreview) {
       const e = createPreview({ fileName: out.label, task: out.task, ttl: out.ttl, thread: t });
@@ -136,14 +131,16 @@ export function Chat({ samples }: { samples: Sample[] }) {
       return;
     }
     try {
-      const res = await createJob({ taskType: out.task, ttl: out.ttl, fileName: out.fileName, fileContent: out.content });
+      const res = await runJob({ taskType: out.task, ttl: out.ttl, fileName: out.fileName, content: out.content }, (stage) =>
+        setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
+      );
       remember({
         id: res.jobId,
         fileName: out.label,
         task: out.task,
         ttl: out.ttl,
         createdAt: stamp(),
-        expiresAt: res.expiresAt ? res.expiresAt * 1000 : null,
+        expiresAt: res.expiresAt,
         preview: false,
         thread: t,
       });
@@ -550,26 +547,44 @@ function Reply({ id }: { id: string }) {
         </div>
       )}
 
+      {vm.phase === "locked" && (
+        <div className="relative pl-5">
+          <span className="absolute top-1 bottom-1 left-0 w-px bg-frost/15" aria-hidden="true" />
+          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "Encrypted answer"}</p>
+          <Meta>
+            <span className="text-frost/70">The key for this answer was kept in the browser session that sent it, and this one doesn&rsquo;t have it.</span>
+          </Meta>
+        </div>
+      )}
+
       {(vm.phase === "failed" || vm.phase === "refunded" || vm.phase === "missing") && (
         <p className="border-l border-melon/50 pl-5 text-[14px] text-frost/80">
-          {vm.phase === "refunded" ? "This job failed after payment and was refunded." : vm.phase === "missing" ? "This job isn't on-chain." : "This job failed. Nothing was stored."}
+          {vm.phase === "refunded" ? "This job failed after payment and was refunded." : vm.phase === "missing" ? "This job isn't on-chain." : "This job never completed. The contract refunds it after its timeout."}
         </p>
       )}
     </div>
   );
 }
 
-function Working({ started }: { started: number }) {
+const STAGES: Stage[] = ["encrypt", "create", "infer", "seal", "store"];
+
+function Working({ started, stage }: { started: number; stage?: Stage }) {
   const now = useNow();
   const secs = Math.max(0, Math.floor((now - started) / 1000));
-  // The server doesn't report progress, so this walks the real order without claiming which step it is on.
-  const step = Math.min(SERVER_STEPS.length - 1, Math.floor(secs / 5));
+  const at = stage ? STAGES.indexOf(stage) : -1;
   return (
     <div className="pl-5">
       <p className="text-[15px]">
-        <span className="shimmer">{SERVER_STEPS[step]}</span>
+        <span className="shimmer">{stage ? STAGE_LABEL[stage] : "Waiting for the job to complete"}</span>
         <span className="num ml-2 text-[12px] text-frost-soft/50">{secs}s</span>
       </p>
+      {stage && (
+        <div className="mt-2.5 flex gap-1" aria-hidden="true">
+          {STAGES.map((st, i) => (
+            <span key={st} className={cn("h-0.5 w-5 rounded-full transition-colors duration-500", i < at ? "bg-volt-lit/80" : i === at ? "animate-pulse bg-frost/70" : "bg-frost/10")} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -585,12 +600,12 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
           <span className="text-[13px] font-medium text-frost/80">Enigma</span>
         </div>
         {!p.error ? (
-          <Working started={p.started} />
+          <Working started={p.started} stage={p.stage} />
         ) : (
           <div role="alert" className="border-l border-melon/60 pl-5">
             <p className="text-[15px] text-frost">{p.error.notConfigured ? "The server isn't set up to run jobs yet." : "This message didn't go through."}</p>
             <p className="mt-1.5 font-mono text-[12px] leading-relaxed break-words text-frost/45">{p.error.message}</p>
-            {refund && <p className="mt-2 text-[13.5px] text-frost/70">Job {String(p.error.body.jobId)} was stopped and its key wiped. The payment comes back after the contract&rsquo;s timeout.</p>}
+            {refund && <p className="mt-2 text-[13.5px] text-frost/70">Job {String(p.error.body.jobId)} was opened but couldn&rsquo;t finish, so this browser wiped its key. The payment comes back after the contract&rsquo;s timeout.</p>}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {p.error.notConfigured && (
                 <Button size="sm" onClick={onPreview}>
