@@ -9,7 +9,7 @@ import {
   type ZGComputeNetworkBroker,
 } from "@0gfoundation/0g-compute-ts-sdk";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { SYSTEM_PROMPTS, type TaskType } from "../constants";
+import { SYSTEM_PROMPT } from "../constants";
 
 const ZG_RPC = "https://evmrpc-testnet.0g.ai";
 const ZG_CHAIN_ID = 16602;
@@ -150,7 +150,6 @@ const MAX_OUTPUT_TOKENS = 8192;
 export async function runDirectInference(
   broker: ZGComputeNetworkBroker,
   provider: TeeProvider,
-  taskType: TaskType,
   content: string,
   imageBase64?: string,
   mimeType = "image/png"
@@ -158,7 +157,7 @@ export async function runDirectInference(
   const messages: Array<{
     role: string;
     content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-  }> = [{ role: "system", content: SYSTEM_PROMPTS[taskType] }];
+  }> = [{ role: "system", content: SYSTEM_PROMPT }];
 
   if (imageBase64) {
     messages.push({

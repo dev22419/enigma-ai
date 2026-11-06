@@ -1,9 +1,6 @@
-import type { TaskType } from "./constants";
-
 export interface Job {
   id: string;
   userId: string;
-  taskType: TaskType;
   fileName: string;
   fileHash: string;
   resultHash: string | null;
@@ -17,7 +14,6 @@ export interface Job {
 }
 
 export interface CreateJobRequest {
-  taskType: TaskType;
   ttl: number;
   fileName: string;
   fileHash: string;
@@ -39,7 +35,6 @@ export interface CreateJobResponse {
 export interface InferRequest {
   /** The job this reading is for. Needs the job's x-access-token header. */
   jobId: string;
-  taskType: TaskType;
   content: string;
   fileName: string;
 }

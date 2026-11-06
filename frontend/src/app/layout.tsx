@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Enigma: private AI for sensitive documents",
   description:
-    "Run AI on medical, legal and financial documents inside a sealed enclave. The answer is destroyed on a timer you set, and a receipt on Whitechain proves it.",
+    "Run AI on sensitive documents inside a sealed enclave. The answer is destroyed on a timer you set, and a receipt on Whitechain proves it.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

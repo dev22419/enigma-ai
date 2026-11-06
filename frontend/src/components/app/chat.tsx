@@ -33,16 +33,9 @@ import {
   type IndexEntry,
   type Payer,
   type Stage,
-  type Task,
 } from "./jobs";
 
-export type Sample = { key: string; label: string; task: Task; fileName: string; text: string; blurb: string };
-
-const TASKS: { key: Task; name: string }[] = [
-  { key: "medical", name: "Medical" },
-  { key: "legal", name: "Legal" },
-  { key: "financial", name: "Financial" },
-];
+export type Sample = { key: string; label: string; fileName: string; text: string; blurb: string };
 
 const LIFESPANS = [{ label: "5 min", ttl: 300 }, ...TTL_OPTIONS].sort((a, b) => a.ttl - b.ttl);
 
@@ -55,9 +48,9 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
 // `src` is only for showing the image in this tab. It is never sent.
 type Attachment = { name: string; content: string; kind: "text" | "image"; bytes: number; src?: string };
-type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
+type Outgoing = { label: string; content: string; fileName: string; ttl: number; text: string; attachment: Attachment | null };
 type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null; jobId?: string };
-type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
+type Draft = { text: string; att: Attachment | null; ttl: number };
 
 /** The balance changes when a job is paid for; ask the wallet box to re-read it once the chain has caught up. */
 const refreshCreditSoon = () => setTimeout(() => window.dispatchEvent(new Event("enigma:credit")), 1500);
@@ -78,9 +71,6 @@ function readAsDataUrl(file: File) {
   });
 }
 
-function taskName(t: Task | null) {
-  return TASKS.find((x) => x.key === t)?.name ?? "";
-}
 
 /* ================================================================== chat */
 
@@ -93,7 +83,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
   // What you typed this session, shown in your messages. Kept in memory only, never saved.
   const [sent, setSent] = useState<Record<string, Outgoing>>({});
   const [preview, setPreview] = useState(false);
-  const [draft, setDraft] = useState<Draft>({ text: "", att: null, task: "medical", ttl: 3600 });
+  const [draft, setDraft] = useState<Draft>({ text: "", att: null, ttl: 3600 });
   const bottom = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -186,7 +176,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
     );
 
     if (asPreview) {
-      const e = createPreview({ fileName: out.label, task: out.task, ttl: out.ttl, thread: t });
+      const e = createPreview({ fileName: out.label, ttl: out.ttl, thread: t });
       setSent((s) => ({ ...s, [e.id]: out }));
       setPending((p) => p.filter((x) => x.key !== key));
       return;
@@ -196,11 +186,11 @@ export function Chat({ samples }: { samples: Sample[] }) {
         gate.kind === "ok" && gate.address && gate.price ? { address: gate.address, price: gate.price, sign: (message) => signMessageAsync({ message }) } : undefined;
       if (!payer && !SERVICE_PAID) throw new ApiError("Connect a wallet with credit to send.", 0);
       const res = await runJob(
-        { taskType: out.task, ttl: out.ttl, fileName: out.fileName, content: out.content },
+        { ttl: out.ttl, fileName: out.fileName, content: out.content },
         (stage) => setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
         (jobId) => {
           setPending((p) => p.map((x) => (x.key === key ? { ...x, jobId } : x)));
-          remember({ id: jobId, fileName: out.label, task: out.task, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t, user: payer?.address.toLowerCase() });
+          remember({ id: jobId, fileName: out.label, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t, user: payer?.address.toLowerCase() });
         },
         payer,
         directTee ?? undefined,
@@ -209,7 +199,6 @@ export function Chat({ samples }: { samples: Sample[] }) {
       remember({
         id: res.jobId,
         fileName: out.label,
-        task: out.task,
         ttl: out.ttl,
         createdAt: stamp(),
         expiresAt: res.expiresAt,
@@ -232,7 +221,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
   }
 
   function pickSample(s: Sample) {
-    setDraft((d) => ({ ...d, task: s.task, ttl: 300, att: { name: s.fileName, content: s.text, kind: "text", bytes: new Blob([s.text]).size } }));
+    setDraft((d) => ({ ...d, ttl: 300, att: { name: s.fileName, content: s.text, kind: "text", bytes: new Blob([s.text]).size } }));
     composerRef.current?.focus();
   }
 
@@ -348,7 +337,7 @@ function Composer({
   const [err, setErr] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const file = useRef<HTMLInputElement>(null);
-  const { text, att, task, ttl } = draft;
+  const { text, att, ttl } = draft;
 
   useEffect(() => {
     const el = areaRef.current;
@@ -411,13 +400,12 @@ function Composer({
     const typed = text.trim();
     let out: Outgoing;
     if (att?.kind === "image") {
-      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, task, ttl, text: typed, attachment: att };
+      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, ttl, text: typed, attachment: att };
     } else if (att) {
-      // The model treats everything as document content, so notes travel with the document, clearly marked.
       const content = typed ? `${att.content}\n\nNOTES FROM THE SENDER\n${typed}` : att.content;
-      out = { label: att.name, content, fileName: att.name, task, ttl, text: typed, attachment: att };
+      out = { label: att.name, content, fileName: att.name, ttl, text: typed, attachment: att };
     } else {
-      out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", task, ttl, text: typed, attachment: null };
+      out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", ttl, text: typed, attachment: null };
     }
     onSend(out);
   }
@@ -497,13 +485,6 @@ function Composer({
           >
             {parsing ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
           </button>
-          <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))}>
-            {TASKS.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.name}
-              </option>
-            ))}
-          </QuietSelect>
           <QuietSelect label="Destroy the answer after" value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}>
             {LIFESPANS.map((o) => (
               <option key={o.ttl} value={o.ttl}>
@@ -580,7 +561,7 @@ function Thumb({ src, className }: { src: string; className?: string }) {
   return <img src={src} alt="" className={cn("shrink-0 rounded-lg object-cover", className)} />;
 }
 
-function UserMessage({ label, out, ttl, task }: { label: string; out?: Outgoing; ttl: number; task: Task | null }) {
+function UserMessage({ label, out, ttl }: { label: string; out?: Outgoing; ttl: number }) {
   const typed = out?.text ?? "";
   const doc = out?.attachment;
   return (
@@ -597,7 +578,7 @@ function UserMessage({ label, out, ttl, task }: { label: string; out?: Outgoing;
         {typed && <p className={cn("line-clamp-6 text-[15px] leading-relaxed whitespace-pre-wrap text-frost/90", (doc || !out) && "mt-2")}>{typed}</p>}
       </div>
       <p className="mt-1.5 px-1 text-[12px] text-frost-soft/60">
-        {taskName(task)}, destroyed after {ttlLabel(ttl)}
+        Destroyed after {ttlLabel(ttl)}
         {!out && ". Content isn't kept in this browser"}
       </p>
     </div>
@@ -611,7 +592,7 @@ function Meta({ children }: { children: ReactNode }) {
 function Turn({ entry, out }: { entry: IndexEntry; out?: Outgoing }) {
   return (
     <div className="space-y-6">
-      <UserMessage label={entry.fileName} out={out} ttl={entry.ttl} task={entry.task} />
+      <UserMessage label={entry.fileName} out={out} ttl={entry.ttl} />
       <Reply id={entry.id} />
     </div>
   );
@@ -760,7 +741,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
   const refund = p.error && typeof p.error.body.refund === "string";
   return (
     <div className="space-y-6">
-      <UserMessage label={p.out.label} out={p.out} ttl={p.out.ttl} task={p.out.task} />
+      <UserMessage label={p.out.label} out={p.out} ttl={p.out.ttl} />
       <div className="rise">
         <div className="mb-3 flex items-center gap-2.5">
           <OrbMark />

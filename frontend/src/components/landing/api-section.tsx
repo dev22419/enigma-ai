@@ -19,7 +19,6 @@ const CALLS: Call[] = [
     lines: [
       [["// your browser encrypted the file with a key only it holds", "p"]],
       [["{", "p"]],
-      [['  "taskType"', "k"], [": ", "p"], ['"legal"', "s"], [",", "p"]],
       [['  "ttl"', "k"], [": ", "p"], ["3600", "n"], [",", "p"]],
       [['  "fileName"', "k"], [": ", "p"], ['"supply-agreement.txt"', "s"], [",", "p"]],
       [['  "fileHash"', "k"], [": ", "p"], ['"0x9c1e…a47b02d6"', "s"], [",", "p"]],
@@ -35,7 +34,6 @@ const CALLS: Call[] = [
     lines: [
       [["// plaintext passes through to the enclave, never stored or logged", "p"]],
       [["{", "p"]],
-      [['  "taskType"', "k"], [": ", "p"], ['"legal"', "s"], [",", "p"]],
       [['  "fileName"', "k"], [": ", "p"], ['"supply-agreement.txt"', "s"], [",", "p"]],
       [['  "content"', "k"], [": ", "p"], ['"<document text or base64 image>"', "s"]],
       [["}", "p"]],

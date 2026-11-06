@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { LiveCanvas, noise, type Paint } from "./live-canvas";
 import { Reveal } from "./reveal";
 
-/** One entry per task type the API accepts (TASK_TYPES in src/lib/constants.ts). */
+/** Example use cases shown on the landing page. */
 const CASES = [
   {
     who: "Clinics",

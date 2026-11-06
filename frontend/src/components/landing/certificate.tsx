@@ -11,7 +11,6 @@ import { Scramble } from "./scramble";
 /** Sample values in the shape of GET /api/jobs/[id]/receipt. Not a real transaction. */
 const FIELDS: [string, string][] = [
   ["Job", "1042"],
-  ["Task", "legal"],
   ["File hash", "0x9c1e…a47b02d6"],
   ["Result hash", "0x4f70…e1c93a58"],
   ["Attestation record", "0xb28d…07f6c411"],
