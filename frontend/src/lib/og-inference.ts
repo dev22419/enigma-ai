@@ -70,7 +70,7 @@ ${note}` : "Analyze this document:" },
   } else {
     messages.push({
       role: "user",
-      content: `Analyze the following document:\n\n${fileContent}`,
+      content: history?.length ? fileContent : `Analyze the following document:\n\n${fileContent}`,
     });
   }
 

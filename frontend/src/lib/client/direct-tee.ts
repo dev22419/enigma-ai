@@ -178,7 +178,7 @@ export async function runDirectInference(
   } else {
     messages.push({
       role: "user",
-      content: `Analyze the following document:\n\n${content}`,
+      content: history?.length ? content : `Analyze the following document:\n\n${content}`,
     });
   }
 
