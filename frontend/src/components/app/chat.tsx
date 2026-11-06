@@ -238,7 +238,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
       {empty ? (
         <div className="flex min-h-full flex-1 flex-col px-5 sm:px-8">
-          <div className="rise mx-auto flex w-full max-w-[640px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
+          <div className="rise mx-auto flex w-full max-w-[920px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
             <p className="inline-flex items-center gap-2 rounded-full bg-black/25 py-1 pr-3 pl-1 text-[13px] text-frost/90 backdrop-blur-sm">
               <span className="rounded-full bg-volt px-2 py-0.5 text-[12px] font-medium text-night">Private</span>
               Encrypted before it leaves your browser
@@ -263,7 +263,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
       ) : (
         <>
           <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-            <div ref={content} className="mx-auto max-w-[680px] space-y-12 px-5 pt-6 pb-10 sm:px-8">
+            <div ref={content} className="mx-auto max-w-[1120px] space-y-12 px-5 pt-6 pb-10 sm:px-8">
               {jobs.map((j) => (
                 <Turn key={j.id} entry={j} out={sent[j.id]} />
               ))}
@@ -274,7 +274,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
             </div>
           </div>
           <div className="shrink-0 px-5 pt-3 pb-5 sm:px-8">
-            <div className="mx-auto max-w-[680px]">{composer}</div>
+            <div className="mx-auto max-w-[1120px]">{composer}</div>
           </div>
         </>
       )}
