@@ -9,6 +9,7 @@ const ENIGMA_ABI = [
   "function nextJobId() external view returns (uint256)",
   "function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256)",
   "function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes signature) external",
+  "function refundJob(uint256 jobId) external",
   "function deposit(uint256 amount) external",
   "event JobCreated(uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment, uint32 expirySeconds)",
   "event JobCompleted(uint256 indexed jobId, address indexed user, bytes32 resultHash, bytes32 attestationHash, address signer, uint64 expiresAt)",
@@ -97,6 +98,14 @@ export async function completeJobOnChain(
   const signer = getSigner();
   const contract = getContract(signer);
   const tx = await contract.completeJob(jobId, resultHash, attestationHash, signature);
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
+export async function refundJobOnChain(jobId: number): Promise<string> {
+  const signer = getSigner();
+  const contract = getContract(signer);
+  const tx = await contract.refundJob(jobId);
   const receipt = await tx.wait();
   return receipt.hash;
 }
