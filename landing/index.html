@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enigma AI. AI that forgets you.</title>
+<meta name="description" content="Send sensitive documents to AI. They are read inside a hardware enclave, answered, and erased on a timer you set. Only a signed receipt stays on-chain.">
+<meta name="theme-color" content="#050807">
+<link rel="preload" href="/fonts/sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/mono.woff2" as="font" type="font/woff2" crossorigin>
+<script>
+(function () {
+  var d = document.documentElement, gl = typeof WebGL2RenderingContext === 'function';
+  d.classList.add(gl ? 'gl' : 'no-gl');
+  try {
+    if (gl && !sessionStorage.getItem('enigma-intro') && !location.hash && !/intro=0/.test(location.search)
+      && !matchMedia('(prefers-reduced-motion: reduce)').matches) d.classList.add('intro-pending');
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+
+<header class="hero" id="top">
+  <canvas aria-hidden="true"></canvas>
+
+  <div class="intro" hidden>
+    <div class="intro-dossier">
+      <p class="intro-lead">This page has been open for <span data-i="secs">0.0</span> seconds.<br>Here is what it can already see.</p>
+      <dl data-i="facts"></dl>
+      <p class="intro-bridge" data-i="bridge">That is a web page. An AI gets your actual files.</p>
+    </div>
+    <div class="intro-alarm" data-i="alarm">
+      <p class="intro-flag" data-i="flag">Warning</p>
+      <p class="intro-title" data-i="title"></p>
+      <p class="intro-sub" data-i="sub"></p>
+    </div>
+    <div class="intro-count" data-i="count"><span data-i="num">1</span><small>readable copies of one file</small></div>
+    <div data-i="tags"></div>
+    <p class="intro-legal" data-i="legal">Illustration. Real handling depends on each provider’s terms. The device details were read in your browser and never sent.</p>
+    <button type="button" class="intro-skip">Skip intro</button>
+  </div>
+
+  <nav class="top" aria-label="Primary">
+    <a class="mark" href="#top">Enigma</a>
+    <div class="top-links">
+      <a href="#case">The problem</a>
+      <a href="#how">How it works</a>
+      <a href="#proof">Try it</a>
+      <a href="#faq">Plain words</a>
+    </div>
+  </nav>
+
+  <p class="hero-note">
+    <span class="hero-status"><span data-status>Key in memory</span> <span data-clock>00:12</span></span>
+    <span class="hero-explain">This rain is a contract, encrypted in your browser. Move across it to read it.</span>
+  </p>
+
+  <div class="hero-copy">
+    <p>Send a file to AI. It is read in a sealed enclave, answered, then erased. Only a receipt stays.</p>
+    <div class="hero-actions">
+      <a class="button" href="#proof">Forget a file</a>
+      <a class="quiet-link" href="#how">See how it works</a>
+    </div>
+  </div>
+
+  <h1><span data-line="1">AI</span> <span data-line="1">that</span><br><span data-line="2">forgets</span> <span data-line="2">you</span></h1>
+
+  <p class="hero-receipt" aria-hidden="true"><span>Receipt kept. Content gone.</span><span data-receipt-hash></span></p>
+</header>
+
+<main>
+  <section class="paper" id="case">
+    <div class="wrap">
+      <h2 data-decrypt>Where does your file go?</h2>
+
+      <div class="flow" data-reveal>
+        <svg viewBox="0 0 600 380" role="img" aria-label="In a typical AI chat one file spreads to provider logs, human review, training data, other vendors and legal holds.">
+          <defs>
+            <path id="f0" d="M78 190 H270"/>
+            <path id="a1" d="M330 190 C400 190 400 60 480 60"/>
+            <path id="a2" d="M330 190 C400 190 400 125 480 125"/>
+            <path id="a3" d="M330 190 H480"/>
+            <path id="a4" d="M330 190 C400 190 400 255 480 255"/>
+            <path id="a5" d="M330 190 C400 190 400 320 480 320"/>
+          </defs>
+          <text class="fl-h" x="28" y="26">Typical AI chat</text>
+          <g class="fl-file"><rect x="28" y="160" width="50" height="60"/><path d="M38 176h30M38 188h30M38 200h20"/></g>
+          <rect class="fl-node" x="270" y="160" width="60" height="60"/><text class="fl-t" x="300" y="195" text-anchor="middle">AI</text>
+          <use href="#f0" class="fl-p"/>
+          <use href="#a1" class="fl-p"/><use href="#a2" class="fl-p"/><use href="#a3" class="fl-p"/><use href="#a4" class="fl-p"/><use href="#a5" class="fl-p"/>
+          <g class="fl-labels">
+            <text x="492" y="65">Provider logs</text><text x="492" y="130">Human review</text>
+            <text x="492" y="195">Training data</text><text x="492" y="260">Other vendors</text><text x="492" y="325">Legal hold</text>
+          </g>
+          <g class="fl-red">
+            <circle r="5"><animateMotion dur="1.2s" repeatCount="indefinite"><mpath href="#f0"/></animateMotion></circle>
+            <circle r="5"><animateMotion dur="1.8s" begin="0s" repeatCount="indefinite"><mpath href="#a1"/></animateMotion></circle>
+            <circle r="5"><animateMotion dur="1.8s" begin=".36s" repeatCount="indefinite"><mpath href="#a2"/></animateMotion></circle>
+            <circle r="5"><animateMotion dur="1.8s" begin=".72s" repeatCount="indefinite"><mpath href="#a3"/></animateMotion></circle>
+            <circle r="5"><animateMotion dur="1.8s" begin="1.08s" repeatCount="indefinite"><mpath href="#a4"/></animateMotion></circle>
+            <circle r="5"><animateMotion dur="1.8s" begin="1.44s" repeatCount="indefinite"><mpath href="#a5"/></animateMotion></circle>
+          </g>
+        </svg>
+        <svg viewBox="640 0 560 380" role="img" aria-label="With Enigma the file stops at a sealed enclave. Only a timed answer and a receipt come out.">
+          <defs>
+            <path id="e0" d="M708 190 H880"/>
+            <path id="e1" d="M1000 165 C1040 165 1050 110 1090 110"/>
+            <path id="e2" d="M1000 215 C1040 215 1050 270 1090 270"/>
+          </defs>
+          <text class="fl-h" x="660" y="26">Enigma</text>
+          <g class="fl-file fl-sealed"><rect x="658" y="160" width="50" height="60"/><path d="M668 176h30M668 188h30M668 200h20"/></g>
+          <rect class="fl-wall" x="880" y="130" width="120" height="120"/><text class="fl-t fl-g" x="940" y="186" text-anchor="middle">Enclave</text><text class="fl-s" x="940" y="206" text-anchor="middle">sealed room</text>
+          <use href="#e0" class="fl-p fl-gp"/><use href="#e1" class="fl-p fl-gp"/><use href="#e2" class="fl-p fl-gp"/>
+          <g class="fl-labels"><text x="1098" y="104">Answer</text><text class="fl-s" x="1098" y="124">then expires</text><text x="1098" y="264">Receipt</text><text class="fl-s" x="1098" y="284">stays on-chain</text></g>
+          <g class="fl-green">
+            <circle r="5"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#e0"/></animateMotion></circle>
+            <circle r="5"><animateMotion dur="1.5s" begin=".5s" repeatCount="indefinite"><mpath href="#e1"/></animateMotion><animate attributeName="opacity" values="1;1;0" keyTimes="0;.6;1" dur="1.5s" begin=".5s" repeatCount="indefinite"/></circle>
+            <circle r="5"><animateMotion dur="1.5s" begin="1s" repeatCount="indefinite"><mpath href="#e2"/></animateMotion></circle>
+          </g>
+        </svg>
+      </div>
+
+      <div class="stats">
+        <div data-reveal><b data-count="7.42" data-dec="2" data-pre="$" data-post="M">$7.42M</b><a href="https://www.ibm.com/reports/data-breach" target="_blank" rel="noopener">Average healthcare breach</a></div>
+        <div data-reveal><b data-count="250" data-pre="₹" data-post=" crore">₹250 crore</b><a href="https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf" target="_blank" rel="noopener">Maximum DPDP penalty</a></div>
+        <div data-reveal><b>1 in 5</b><a href="https://www.ibm.com/reports/data-breach" target="_blank" rel="noopener">Hit by a shadow AI breach</a></div>
+      </div>
+
+      <div class="bind" data-reveal>
+        <div class="bind-head"><span></span><span>Content</span><span>Proof</span></div>
+        <div class="bind-row"><b>Keep everything</b><span class="bar"><i></i><em>Kept</em></span><span class="bar"><i></i><em>Kept</em></span></div>
+        <div class="bind-row"><b>Delete everything</b><span class="bar is-lost"><i></i><em>Gone</em></span><span class="bar is-lost"><i></i><em>Gone</em></span></div>
+        <div class="bind-row bind-enigma"><b>Enigma</b><span class="bar is-lost"><i></i><em>Gone</em></span><span class="bar"><i></i><em>Kept</em></span></div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="how" id="how">
+    <div class="journey">
+      <div class="journey-stage">
+        <header class="journey-head">
+          <h2 data-decrypt>How it works</h2>
+          <div class="level" role="group" aria-label="Explanation level">
+            <button type="button" data-level="new" aria-pressed="true">New to crypto</button>
+            <button type="button" data-level="basic" aria-pressed="false">Basics</button>
+            <button type="button" data-level="dev" aria-pressed="false">Developer</button>
+          </div>
+        </header>
+        <canvas role="img" aria-label="A file is encrypted with a one-time key, read inside a sealed enclave, then produces an answer that expires and a receipt that stays on-chain."></canvas>
+        <div class="jsteps" data-show="new">
+          <i></i>
+          <button type="button" class="jstep"><b>Lock</b><span data-for="new">Sealed with a one-time key</span><span data-for="basic">AES-256-GCM, one key per job</span><span data-for="dev"><code>per-job key, 0G Storage</code></span></button>
+          <button type="button" class="jstep"><b>Read</b><span data-for="new">Read in a sealed enclave</span><span data-for="basic">Runs on 0G TEE compute</span><span data-for="dev"><code>0G router, verify_tee</code></span></button>
+          <button type="button" class="jstep"><b>Prove</b><span data-for="new">Receipt goes on-chain</span><span data-for="basic">Hashes settled on Whitechain</span><span data-for="dev"><code>EIP-712 Complete, ecrecover</code></span></button>
+          <button type="button" class="jstep"><b>Forget</b><span data-for="new">Key destroyed, answer gone</span><span data-for="basic">Arkiv expiry, key destroyed</span><span data-for="dev"><code>Arkiv TTL, key destruction</code></span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="proof" id="proof">
+    <div class="wrap">
+      <header class="sec-head">
+        <h2 data-decrypt>Try it. Forget a file.</h2>
+        <p>Real encryption in this page. Nothing is uploaded.</p>
+      </header>
+
+      <div class="proof-desk" data-stage="idle">
+        <div class="desk-stage">
+          <label class="drop" for="proof-file">
+            <input id="proof-file" type="file">
+            <span class="drop-title">Drop a file here</span>
+            <span class="drop-sub" data-v="dropsub">up to 25 MB</span>
+          </label>
+          <div class="drop-foot">
+            <button type="button" class="text-button" data-a="sample">Use the sample contract</button>
+            <div class="ttl" role="group" aria-label="Time to live">
+              <span>Forget after</span>
+              <button type="button" data-ttl="5" aria-pressed="false">5s</button>
+              <button type="button" data-ttl="15" aria-pressed="true">15s</button>
+              <button type="button" data-ttl="30" aria-pressed="false">30s</button>
+            </div>
+          </div>
+
+          <div class="reader">
+            <div class="reader-head">
+              <span>Readable for</span>
+              <span class="reader-clock" data-v="clock" role="timer">00:15</span>
+            </div>
+            <div class="reader-bar"><i data-v="bar"></i></div>
+            <pre data-v="body" tabindex="0" aria-label="File preview"></pre>
+            <p class="reader-empty">Nothing left to read.</p>
+          </div>
+        </div>
+
+        <dl class="ledger" aria-live="polite">
+          <div><dt>File</dt><dd data-v="name">Waiting</dd></div>
+          <div hidden><dt>Size</dt><dd data-v="size">–</dd></div>
+          <div class="ledger-keep"><dt>Fingerprint <em>kept</em></dt><dd data-v="hash">–</dd></div>
+          <div hidden><dt>AES-256-GCM</dt><dd data-v="cipher">–</dd></div>
+          <div><dt>Key</dt><dd data-v="key">–</dd></div>
+          <div><dt>Decrypt attempt</dt><dd data-v="attempt">–</dd></div>
+          <div class="ledger-actions">
+            <button type="button" class="button" data-a="reverify">Verify a file against this receipt</button>
+            <button type="button" class="text-button" data-a="again">Start over</button>
+            <p data-v="verdict" role="status"></p>
+          </div>
+        </dl>
+      </div>
+
+      <p class="proof-scope">This demo runs only in your browser. The product encrypts on our backend, and the enclave and chain steps run in the testnet build.</p>
+    </div>
+  </section>
+  <section class="paper who" id="who">
+    <div class="wrap">
+      <h2 data-decrypt>Who it’s for</h2>
+      <div class="vigs">
+        <article class="vig" data-reveal>
+          <svg class="art art-med" viewBox="0 0 280 170" aria-hidden="true">
+            <g class="a-fade">
+              <path class="a-ecg" pathLength="1" d="M10 70 H70 L84 30 L100 112 L116 54 L126 70 H190 L204 30 L220 112 L236 54 L246 70 H270"/>
+              <rect class="a-sum" x="10" y="130" width="170" height="10"/>
+            </g>
+            <g class="a-rc"><rect x="90" y="62" width="100" height="46"/><text x="140" y="90" text-anchor="middle">Receipt</text></g>
+          </svg>
+          <h3>Hospitals</h3>
+          <p>Patient records, summarised.</p>
+        </article>
+        <article class="vig" data-reveal>
+          <svg class="art art-law" viewBox="0 0 280 170" aria-hidden="true">
+            <g class="a-fade">
+              <rect class="a-doc" x="84" y="6" width="112" height="158"/>
+              <path class="a-lines" d="M100 30h80M100 50h80M100 110h80M100 130h52"/>
+              <rect class="a-hl" x="96" y="68" width="88" height="24"/>
+              <path class="a-lines" d="M100 80h80"/>
+              <circle class="a-stamp" cx="196" cy="130" r="24"/>
+            </g>
+            <g class="a-rc"><rect x="90" y="62" width="100" height="46"/><text x="140" y="90" text-anchor="middle">Receipt</text></g>
+          </svg>
+          <h3>Law firms</h3>
+          <p>Client contracts, reviewed.</p>
+        </article>
+        <article class="vig" data-reveal>
+          <svg class="art art-bank" viewBox="0 0 280 170" aria-hidden="true">
+            <g class="a-fade">
+              <rect class="a-row" x="30" y="14" width="220" height="20"/><rect class="a-row" x="30" y="42" width="220" height="20"/>
+              <rect class="a-row a-flag" x="30" y="70" width="220" height="20"/>
+              <rect class="a-row" x="30" y="98" width="220" height="20"/><rect class="a-row" x="30" y="126" width="220" height="20"/>
+              <rect class="a-scan" x="22" y="8" width="236" height="3"/>
+            </g>
+            <g class="a-rc"><rect x="90" y="62" width="100" height="46"/><text x="140" y="90" text-anchor="middle">Receipt</text></g>
+          </svg>
+          <h3>Banks</h3>
+          <p>Statements, checked.</p>
+        </article>
+      </div>
+      <ul class="facts">
+        <li data-reveal>No wallet for staff</li>
+        <li data-reveal>0.50 USDT a job</li>
+        <li data-reveal>Refund if it fails</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="paper faq" id="faq">
+    <div class="wrap">
+      <h2 data-decrypt>In plain words</h2>
+      <div class="tiles">
+        <figure class="tile" data-reveal>
+          <svg viewBox="0 0 160 90" aria-hidden="true"><rect class="t-box" x="50" y="10" width="60" height="70"/><circle class="t-g" r="5"><animateMotion dur="2.4s" repeatCount="indefinite" path="M62 22 L98 46 L66 68 L92 30 Z"/></circle></svg>
+          <figcaption><b>Enclave</b>A locked room in the chip</figcaption>
+        </figure>
+        <figure class="tile" data-reveal>
+          <svg viewBox="0 0 160 90" aria-hidden="true"><rect class="t-file" x="14" y="16" width="44" height="58"/><path class="t-line" d="M66 45 H98"/><circle class="t-g" r="4"><animateMotion dur="1.6s" repeatCount="indefinite" path="M66 45 H98"/></circle><text class="t-code" x="104" y="50">0x7b3</text></svg>
+          <figcaption><b>Hash</b>A file’s fingerprint</figcaption>
+        </figure>
+        <figure class="tile" data-reveal>
+          <svg viewBox="0 0 160 90" aria-hidden="true"><path class="t-line" d="M14 45 H146"/><rect class="t-box" x="58" y="20" width="44" height="50"/><circle class="t-g" r="9"><animateMotion dur="3.6s" repeatCount="indefinite" keyPoints="0;.5;.5;1" keyTimes="0;.3;.7;1" calcMode="linear" path="M14 45 H146"/></circle></svg>
+          <figcaption><b>Escrow</b>Money held until done</figcaption>
+        </figure>
+        <figure class="tile" data-reveal>
+          <svg viewBox="0 0 160 90" aria-hidden="true"><circle class="t-ring" cx="80" cy="45" r="31"/><circle class="t-time" cx="80" cy="45" r="31" pathLength="1"><animate attributeName="stroke-dashoffset" from="0" to="1" dur="4s" repeatCount="indefinite"/></circle></svg>
+          <figcaption><b>TTL</b>A timer on your data</figcaption>
+        </figure>
+      </div>
+      <div class="faq-list">
+        <details><summary>Do I need to understand crypto?</summary><p>No. Staff upload a file and read an answer.</p></details>
+        <details><summary>Isn’t deleting a chat enough?</summary><p>No. A US court made OpenAI <a href="https://www.engadget.com/ai/openai-no-longer-has-to-preserve-all-of-its-chatgpt-data-with-some-exceptions-192422093.html" target="_blank" rel="noopener">preserve deleted chats</a>, and a judge ruled AI chats <a href="https://www.orrick.com/en/Insights/2026/03/Court-Rules-AI-Conversations-Are-Not-Privileged-What-United-States-v-Heppner-Means-for-You" target="_blank" rel="noopener">are not privileged</a>.</p></details>
+        <details><summary>What do I still have to trust?</summary><p>Our backend, which handles the file and reports each run. Also 0G’s enclave hardware and the key that signs results.</p></details>
+        <details><summary>Can anyone verify the enclave ran?</summary><p>Not independently yet. We record which provider served each request on-chain. 0G’s router does not expose an enclave signature today.</p></details>
+        <details><summary>Can I use real data today?</summary><p>Not yet. This is a testnet build.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="end">
+  <div class="wrap">
+    <p class="end-line" data-decrypt>Let AI help without remembering you.</p>
+    <div class="end-meta">
+      <span>Enigma AI</span>
+      <button type="button" class="text-button" data-replay>Replay the warning</button>
+      <span>ETHGlobal Mumbai 2026</span>
+      <span>Testnet build</span>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
