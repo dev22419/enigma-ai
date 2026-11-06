@@ -22,7 +22,11 @@ export interface CreateJobRequest {
   fileName: string;
   fileHash: string;
   encryptedFile: string;
+  /** Wallet whose balance pays. Needs signature, nonce and validUntil (see lib/auth-message.ts). */
   userAddress?: string;
+  signature?: string;
+  nonce?: string;
+  validUntil?: number;
 }
 
 export interface CreateJobResponse {
@@ -33,6 +37,8 @@ export interface CreateJobResponse {
 }
 
 export interface InferRequest {
+  /** The job this reading is for. Needs the job's x-access-token header. */
+  jobId: string;
   taskType: TaskType;
   content: string;
   fileName: string;
@@ -71,4 +77,18 @@ export interface JobReceipt {
   arkivEntityKey: string | null;
   expiresAt: number | null;
   destruction: import("./store").DestructionReceipt | null;
+  keyWipe?: { receiptHash: string; destructionTimestamp: number; anchorTxHash: string } | null;
+}
+
+/** The key-wipe receipt the browser makes when it destroys a job's key (task board #75). */
+export interface KeyWipeRequest {
+  keyId: string;
+  expiryTimestamp: number;
+  destructionTimestamp: number;
+  status: "wiped";
+}
+
+export interface KeyWipeResponse {
+  receiptHash: string;
+  anchorTxHash: string;
 }
