@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signJobCompletion } from "@/lib/oracle-signer";
-import { getJobOnChain, completeJobOnChain, startProcessingOnChain, failJobOnChain } from "@/lib/contract";
+import { getJobOnChain, completeJobOnChain, startProcessingOnChain } from "@/lib/contract";
 import { storeInArkiv } from "@/lib/arkiv";
 import { tokensEqual } from "@/lib/crypto";
 import { withStore, readStore } from "@/lib/store";
@@ -54,6 +54,16 @@ export async function POST(
     return fail(403, "Invalid access token");
   }
   if (row.status === "completed") return fail(409, "Job already completed");
+  // Only the enclave's own answer for this job may be signed. The hashes come from our record of /api/infer,
+  // never from the caller, so a client can't make the oracle attest something the enclave didn't say.
+  if (!row.inferred) return fail(409, "This job hasn't been read yet. Call /api/infer first");
+  if (
+    body.resultHash.toLowerCase() !== row.inferred.resultHash.toLowerCase() ||
+    body.attestationHash.toLowerCase() !== row.inferred.attestationHash.toLowerCase() ||
+    body.chatId !== row.inferred.chatId
+  ) {
+    return fail(403, "These hashes don't match the enclave's answer for this job");
+  }
 
   try {
     const onChainJob = await getJobOnChain(jobId);
@@ -104,12 +114,11 @@ export async function POST(
     return NextResponse.json(response);
   } catch (err) {
     const reason = safeErrorMessage(err);
-    await failJobOnChain(jobId, reason.slice(0, 128)).catch(() => {});
+    // The answer was already delivered by /api/infer, so this job must not be failed: a failed job is refundable
+    // at once, which would let someone read the answer and then get their money back. It stays "processing": the
+    // browser may retry this call, and otherwise the server completes the job itself (lib/settle.ts).
     await withStore((d) => {
-      if (d.jobs[id]) {
-        d.jobs[id].status = "failed";
-        d.jobs[id].error = reason;
-      }
+      if (d.jobs[id]) d.jobs[id].error = reason;
     });
     return fail(502, reason);
   }

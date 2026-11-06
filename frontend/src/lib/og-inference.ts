@@ -1,4 +1,4 @@
-import { ZG_API_URL, ZG_MODEL, SYSTEM_PROMPTS, type TaskType } from "./constants";
+import { ZG_API_URL, ZG_FALLBACK_MODEL, ZG_MODEL, SYSTEM_PROMPTS, type TaskType } from "./constants";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -16,6 +16,8 @@ interface InferenceResult {
   requestId: string;
   // Why the model stopped, e.g. "stop" or "length". "length" means the answer was cut off.
   finishReason: string;
+  // The model that actually answered (the fallback, if the first one's provider was down).
+  model: string;
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -62,24 +64,33 @@ export async function runInference(
     });
   }
 
-  const res = await fetch(`${ZG_API_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: ZG_MODEL,
-      messages,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      verify_tee: true,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`0G inference failed: ${res.status} ${err}`);
+  // The fallback only reads text: it may not accept images, and an image should never be sent somewhere unexpected.
+  const models = imageBase64 || !ZG_FALLBACK_MODEL || ZG_FALLBACK_MODEL === ZG_MODEL ? [ZG_MODEL] : [ZG_MODEL, ZG_FALLBACK_MODEL];
+  let res: Response | null = null;
+  let model = ZG_MODEL;
+  let lastError = "";
+  for (const m of models) {
+    model = m;
+    res = await fetch(`${ZG_API_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: m,
+        messages,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        verify_tee: true,
+      }),
+    });
+    if (res.ok) break;
+    lastError = `0G inference failed: ${res.status} ${await res.text()}`;
+    // Only a provider outage (5xx) moves on to the next model. A bad request would fail there too.
+    if (res.status < 500) break;
   }
+
+  if (!res || !res.ok) throw new Error(lastError);
 
   const data = await res.json();
   const chatId = data.id || "";
@@ -88,20 +99,21 @@ export async function runInference(
   const provider = data.x_0g_trace?.provider || "";
   const requestId = data.x_0g_trace?.request_id || "";
 
-  return { chatId, content, provider, requestId, finishReason };
+  return { chatId, content, provider, requestId, finishReason, model };
 }
 
 export async function getTeeAttestation(
   chatId: string,
   provider: string,
-  requestId: string
+  requestId: string,
+  model: string = ZG_MODEL
 ): Promise<string> {
   const attestation = JSON.stringify({
     chatId,
     provider,
     requestId,
     verifyTee: true,
-    model: ZG_MODEL,
+    model,
     timestamp: Math.floor(Date.now() / 1000),
   });
   return attestation;
