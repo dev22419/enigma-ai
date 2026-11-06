@@ -46,19 +46,20 @@ vec3 scene(vec2 p, float t, float aspect) {
   vec3 col = NIGHT;
 
   // Electric blue: a tall column of light, drifting and leaning toward the pointer
-  vec2 cb = vec2(aspect * (0.74 + 0.05 * sin(t * 0.09)) + (m.x - aspect * 0.5) * 0.08, 0.5 + 0.06 * sin(t * 0.07));
-  col += BLUE * 0.5 * blob(p, cb, vec2(0.34, 0.7));
-  col += BLUE2 * 0.1 * blob(p, cb + vec2(0.25, -0.2), vec2(0.45, 0.45));
+  vec2 cb = vec2(aspect * (0.30 + 0.10 * sin(t * 0.21)) + (m.x - aspect * 0.5) * 0.08, 0.55 + 0.12 * sin(t * 0.17));
+  col += BLUE * 1.5 * blob(p, cb, vec2(0.26, 0.62));
+  col += BLUE2 * 0.35 * blob(p, cb + vec2(0.25, -0.2), vec2(0.45, 0.45));
 
   // Cantaloupe: a low, wide glow that breathes
-  vec2 cm = vec2(aspect * (0.92 + 0.03 * cos(t * 0.08)) + (m.x - aspect * 0.5) * 0.06, 0.1 + 0.03 * sin(t * 0.1));
-  col += MELON * 0.26 * blob(p, cm, vec2(0.3, 0.22));
-  
+  vec2 cm = vec2(aspect * (0.72 + 0.08 * cos(t * 0.19)) + (m.x - aspect * 0.5) * 0.06, 0.22 + 0.06 * sin(t * 0.23));
+  col += MELON * 1.65 * blob(p, cm, vec2(0.34, 0.28));
+  col += MELON * 0.45 * blob(p, vec2(aspect * 0.5, -0.08), vec2(aspect * 0.5, 0.18));
+
   // A flowing S-shaped band of hot light where the two meet
   float wave = p.y - (0.42 + 0.16 * sin(p.x * 2.3 + t * 0.45) + 0.06 * sin(p.x * 5.1 - t * 0.7));
   float band = exp(-wave * wave / 0.0012);
   float bandMask = smoothstep(0.0, 0.35 * aspect, p.x) * smoothstep(aspect, aspect * 0.55, p.x - 0.1);
-  col += mix(BLUE * 1.2, HOT, 0.55 + 0.45 * sin(p.x * 1.7 + t * 0.3)) * band * 0.0 * bandMask;
+  col += mix(BLUE * 1.2, HOT, 0.55 + 0.45 * sin(p.x * 1.7 + t * 0.3)) * band * (0.9 + 0.6 * bandMask);
 
   // Keep the very top dark so the nav and headline sit on black
   col *= mix(1.0, 0.12, smoothstep(0.5, 0.95, p.y) * uFocus);
@@ -109,19 +110,19 @@ void main() {
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
   // Fresnel: edges reflect more, picking up the light around them
   float fres = pow(abs(tilt), 1.4);
-  c += fres * (0.25 * c + 0.02 * vec3(0.85, 0.92, 1.0));
+  c += fres * (0.55 * c + 0.10 * vec3(0.85, 0.92, 1.0));
 
   // A soft glare that follows the pointer across the slabs
   vec3 L = normalize(vec3((uMouse.x - uv.x) * 1.8, 0.0, 0.55));
   vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
   float spec = pow(max(dot(n, H), 0.0), 140.0);
   float glare = exp(-pow((uv.y - (0.35 + 0.25 * uMouse.y)) * 2.2, 2.0)); // strongest at the pointer's height
-  c += spec * (0.05 + 0.45 * lum) * (0.35 + 0.65 * glare) * vec3(1.0, 0.98, 0.96);
+  c += spec * (0.35 + 1.4 * lum) * (0.35 + 0.65 * glare) * vec3(1.0, 0.98, 0.96);
 
   // Bright hairlines where each bevel meets the face, darker one on the far side
   float bevelLit = exp(-pow((f - gap - 0.035) / 0.012, 2.0));
   float bevelDark = exp(-pow((f - (1.0 - gap - 0.03)) / 0.02, 2.0));
-  c += bevelLit * (0.012 + 0.5 * lum) * 0.3;
+  c += bevelLit * (0.08 + 0.9 * lum) * 0.55;
   c *= 1.0 - 0.45 * bevelDark;
 
   // Seams between slabs: near black, with a faint cold edge
@@ -133,8 +134,8 @@ void main() {
   // Tone map so the colours run hot without clipping flat, then restore saturation
   c = 1.0 - exp(-c * 1.1);
   float g = dot(c, vec3(0.299, 0.587, 0.114));
-  c = clamp(mix(vec3(g), c, 1.02), 0.0, 1.0);
-  c += (hash(frag + fract(t)) - 0.5) * 0.012;
+  c = clamp(mix(vec3(g), c, 1.3), 0.0, 1.0);
+  c += (hash(frag + fract(t)) - 0.5) * 0.03;
   gl_FragColor = vec4(c, 1.0);
 }
 `;
@@ -201,8 +202,8 @@ export function FlutedGlass({ className, rib = 34, focus = 1 }: { className?: st
     function resize() {
       if (!canvas || !parent || !gl) return;
       const r = parent.getBoundingClientRect();
-      // Below device resolution: the glass blurs everything anyway, and it keeps the GPU cool
-      scale = Math.min(window.devicePixelRatio || 1, 1.5) * 0.75;
+      // Full device resolution, capped at 2x, so the rib edges stay sharp
+      scale = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(r.width * scale));
       canvas.height = Math.max(1, Math.round(r.height * scale));
       canvas.style.width = `${r.width}px`;

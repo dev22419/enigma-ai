@@ -90,29 +90,12 @@ body {
 }
 
 .display {
-  font-weight: 600;
-  letter-spacing: -0.022em;
-  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
 .narrow {
   letter-spacing: -0.01em;
-}
-/* Landing rhythm: one width, one vertical step, one heading size */
-.shell {
-  margin-inline: auto;
-  max-width: 1200px;
-  padding-inline: clamp(20px, 4vw, 32px);
-}
-.section {
-  border-top: 1px solid rgb(234 243 249 / 0.08);
-  padding-block: clamp(72px, 9vw, 120px);
-}
-.heading {
-  font-size: clamp(1.9rem, 3.4vw, 2.75rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.12;
-  text-wrap: balance;
 }
 .num {
   font-variant-numeric: tabular-nums;
@@ -223,6 +206,18 @@ body {
   animation: stamp-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 
+/* ---------------------------------------------------------------- landing seams */
+@keyframes seam-spark {
+  from {
+    top: -2.5rem;
+  }
+  to {
+    top: 100%;
+  }
+}
+.seam-spark {
+  animation: seam-spark 2.6s cubic-bezier(0.55, 0, 0.45, 1) infinite;
+}
 
 /* ---------------------------------------------------------------- chat */
 

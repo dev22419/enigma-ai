@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import HalftoneWordmarkFooter from "@/components/ui/halftone-wordmark-footer";
 import { plexMono, plexSans } from "@/lib/fonts";
+import { FlutedGlass } from "./fluted-glass";
 
 const COLUMNS = [
   {
@@ -37,13 +38,16 @@ const COLUMNS = [
 export function SiteFooter() {
   return (
     <>
-      <section className="section bg-night text-frost">
-        <div className="shell flex flex-wrap items-end justify-between gap-8">
-          <div>
-            <h2 className="heading max-w-[18ch]">Try it with a sample record</h2>
-            <p className="mt-3 text-[17px] text-frost-soft">Fictional documents are built in.</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
+      <section className="relative isolate overflow-hidden text-frost">
+        <div className="aurora -z-10" aria-hidden="true" />
+        <FlutedGlass className="-z-10" rib={40} />
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_55%_55%_at_50%_45%,rgb(2_7_10/0.8),rgb(2_7_10/0.2)_70%,rgb(2_7_10/0)_90%)]" aria-hidden="true" />
+        <div className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pt-28 pb-24 text-center sm:px-8 md:pt-36">
+          <h2 className="display max-w-[16ch] text-[clamp(2.4rem,6vw,5.2rem)] text-balance">Try it with a sample record</h2>
+          <p className="mt-5 max-w-[32rem] text-[17px] text-frost/80">
+            The app comes with fictional medical, legal and financial documents, so you don&rsquo;t need real data to see it work.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
               <Link href="/chat">Open the app</Link>
             </Button>
@@ -60,10 +64,10 @@ export function SiteFooter() {
         columns={COLUMNS}
         palette={{ background: "#02070a", ink: "#cfe4f2", warm: "#fc734d" }}
         fontFamily={plexSans.style.fontFamily}
-        fontWeight={600}
+        fontWeight={700}
         monoFamily={plexMono.style.fontFamily}
-        crop={0.52}
-        height="clamp(320px, 30vw, 420px)"
+        crop={0.22}
+        height="clamp(420px, 46vw, 620px)"
       />
     </>
   );
