@@ -22,6 +22,8 @@ import {
 } from "@/lib/client/vault";
 import { buildAuthMessage } from "@/lib/auth-message";
 import { CHAIN_ID, ENIGMA_ADDRESS } from "@/lib/client/chain";
+import type { ZGComputeNetworkBroker } from "@0gfoundation/0g-compute-ts-sdk";
+import type { TeeProvider, DirectInferenceResult } from "@/lib/client/direct-tee";
 
 /**
  * Client side of the Enigma API (POST /api/jobs, GET /api/jobs/[id], /receipt, /balance, /history).
@@ -211,15 +213,22 @@ interface StoreResultResponse {
   expiresAt: number;
 }
 
-export type Stage = "encrypt" | "authorize" | "create" | "infer" | "seal" | "store";
+export type Stage = "encrypt" | "authorize" | "create" | "infer" | "direct-infer" | "seal" | "store";
 export const STAGE_LABEL: Record<Stage, string> = {
   encrypt: "Encrypting in your browser",
   authorize: "Waiting for your wallet to sign",
   create: "Opening the job on Whitechain",
   infer: "Reading inside the 0G enclave",
+  "direct-infer": "Reading directly inside the TEE (no backend)",
   seal: "Encrypting the answer in your browser",
   store: "Storing the encrypted answer on Arkiv",
 };
+
+/** When set, runJob uses the direct browser→TEE path. The plaintext never touches the backend. */
+export interface DirectTeeConfig {
+  broker: ZGComputeNetworkBroker;
+  provider: TeeProvider;
+}
 
 /** Answers decrypted (or received) in this tab, so they show without a round trip. Memory only. */
 const fresh = new Map<string, string>();
@@ -258,6 +267,7 @@ export async function runJob(
   onStage: (s: Stage) => void,
   onCreated?: (jobId: string) => void,
   payer?: Payer,
+  directTee?: DirectTeeConfig,
 ): Promise<{ jobId: string; expiresAt: number; result: string }> {
   onStage("encrypt");
   const fileName = neutralFileName(input.fileName);
@@ -301,17 +311,64 @@ export async function runJob(
   onCreated?.(jobId);
 
   try {
-    onStage("infer");
-    // 0G's providers occasionally drop a request. Another try is safe (the server allows three per job).
-    let inf: InferResponse | null = null;
-    for (let attempt = 1; !inf; attempt++) {
-      try {
-        inf = await post<InferResponse>("/api/infer", { jobId, taskType: input.taskType, content: input.content, fileName }, created.accessToken);
-      } catch (e) {
-        const retryable = e instanceof ApiError && e.status === 502 && attempt < 3;
-        if (!retryable) throw e;
-        await new Promise((r) => setTimeout(r, 2000 * attempt));
+    let inf: InferResponse;
+
+    if (directTee) {
+      // PATH B: Direct browser→TEE. Plaintext never touches the backend or the 0G router.
+      onStage("direct-infer");
+      const { runDirectInference } = await import("@/lib/client/direct-tee");
+      const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(fileName);
+      let direct: DirectInferenceResult | null = null;
+      for (let attempt = 1; !direct; attempt++) {
+        try {
+          direct = await runDirectInference(
+            directTee.broker,
+            directTee.provider,
+            input.taskType,
+            input.content,
+            isImage ? input.content : undefined,
+          );
+        } catch (e) {
+          if (attempt >= 3) throw e;
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        }
       }
+      // Build the attestation from the direct response (same shape as the server's getTeeAttestation)
+      const attestation = JSON.stringify({
+        chatId: direct.chatId,
+        provider: direct.provider,
+        requestId: direct.chatId,
+        verifyTee: true,
+        model: direct.model,
+        timestamp: Math.floor(Date.now() / 1000),
+        directMode: true,
+      });
+      const result =
+        direct.finishReason === "length"
+          ? `${direct.content}\n\n[Output truncated: the model reached its length limit.]`
+          : direct.content;
+      inf = {
+        result,
+        chatId: direct.chatId,
+        resultHash: hashText(result),
+        attestationHash: hashText(attestation),
+        provider: direct.provider,
+        requestId: direct.chatId,
+      };
+    } else {
+      // PATH A: Proxy through backend to 0G TEE (private trust mode).
+      onStage("infer");
+      let proxyResult: InferResponse | null = null;
+      for (let attempt = 1; !proxyResult; attempt++) {
+        try {
+          proxyResult = await post<InferResponse>("/api/infer", { jobId, taskType: input.taskType, content: input.content, fileName }, created.accessToken);
+        } catch (e) {
+          const retryable = e instanceof ApiError && e.status === 502 && attempt < 3;
+          if (!retryable) throw e;
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        }
+      }
+      inf = proxyResult;
     }
 
     onStage("seal");

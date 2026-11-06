@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { useSignMessage } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
@@ -27,6 +27,7 @@ import {
   useIndex,
   useJobVM,
   useNow,
+  type DirectTeeConfig,
   type IndexEntry,
   type Payer,
   type Stage,
@@ -111,6 +112,37 @@ export function Chat({ samples }: { samples: Sample[] }) {
   // Real jobs are paid from the connected wallet's balance, by its signature. Previews and demo mode skip this.
   const { gate, credit } = useGate(threadPreview);
   const { signMessageAsync } = useSignMessage();
+  const { connector } = useAccount();
+  const [directTee, setDirectTee] = useState<DirectTeeConfig | null>(null);
+  const [directTeeStatus, setDirectTeeStatus] = useState<"idle" | "checking" | "ready" | "unavailable">("idle");
+
+  // Try to set up direct TEE mode when a wallet connector is available.
+  useEffect(() => {
+    if (!connector || threadPreview || SERVICE_PAID) return;
+    let cancelled = false;
+    setDirectTeeStatus("checking");
+    (async () => {
+      try {
+        const provider = await connector.getProvider();
+        const { getBroker, discoverTeeProviders, ensureProviderReady } = await import("@/lib/client/direct-tee");
+        const broker = await getBroker(provider);
+        const providers = await discoverTeeProviders(broker);
+        if (cancelled) return;
+        if (providers.length === 0) {
+          setDirectTeeStatus("unavailable");
+          return;
+        }
+        const teeProvider = providers[0];
+        await ensureProviderReady(broker, teeProvider.address);
+        if (cancelled) return;
+        setDirectTee({ broker, provider: teeProvider });
+        setDirectTeeStatus("ready");
+      } catch {
+        if (!cancelled) setDirectTeeStatus("unavailable");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [connector, threadPreview]);
 
   // Follow the conversation as it grows (new messages, answers arriving), unless you've scrolled up to read.
   const scroller = useRef<HTMLDivElement>(null);
@@ -158,6 +190,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
           remember({ id: jobId, fileName: out.label, task: out.task, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t, user: payer?.address.toLowerCase() });
         },
         payer,
+        directTee ?? undefined,
       );
       refreshCreditSoon();
       remember({
@@ -215,8 +248,11 @@ export function Chat({ samples }: { samples: Sample[] }) {
           </span>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-[12px] text-frost-soft/70 max-sm:hidden">
-          <span className="size-1.5 rounded-full bg-volt-lit shadow-[0_0_8px_#5cc4ff]" />
-          0gm-1.0-35b-a3b, sealed enclave{SERVICE_PAID ? ", demo mode" : ""}
+          <span className={cn("size-1.5 rounded-full", directTeeStatus === "ready" ? "bg-[#3DDC97] shadow-[0_0_8px_#3DDC97]" : "bg-volt-lit shadow-[0_0_8px_#5cc4ff]")} />
+          {directTeeStatus === "ready"
+            ? `direct TEE, ${directTee?.provider.model ?? "0gm"}`
+            : `0gm-1.0-35b-a3b, sealed enclave`}
+          {SERVICE_PAID ? ", demo mode" : ""}
         </span>
       </header>
 
