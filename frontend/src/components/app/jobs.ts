@@ -230,25 +230,25 @@ export interface DirectTeeConfig {
 
 const PLAIN_PREFIX = "enigma.plain.";
 
-/** Answers decrypted (or received), backed by localStorage so new tabs and refreshes keep them. */
+/** Answers decrypted (or received), backed by sessionStorage (tab-scoped, auto-cleared on close). */
 const fresh = {
   _mem: new Map<string, string>(),
   get(id: string) {
     const m = this._mem.get(id);
     if (m !== undefined) return m;
     try {
-      const s = localStorage.getItem(PLAIN_PREFIX + id);
+      const s = sessionStorage.getItem(PLAIN_PREFIX + id);
       if (s !== null) { this._mem.set(id, s); return s; }
     } catch { /* private mode / no storage */ }
     return undefined;
   },
   set(id: string, text: string) {
     this._mem.set(id, text);
-    try { localStorage.setItem(PLAIN_PREFIX + id, text); } catch { /* best effort */ }
+    try { sessionStorage.setItem(PLAIN_PREFIX + id, text); } catch { /* best effort */ }
   },
   delete(id: string) {
     this._mem.delete(id);
-    try { localStorage.removeItem(PLAIN_PREFIX + id); } catch { /* best effort */ }
+    try { sessionStorage.removeItem(PLAIN_PREFIX + id); } catch { /* best effort */ }
   },
 };
 
