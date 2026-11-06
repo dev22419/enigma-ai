@@ -274,7 +274,7 @@ export async function runJob(
 type ApiJob = {
   jobId: number;
   user: string;
-  status: "None" | "Pending" | "Completed" | "Refunded" | string;
+  status: "None" | "Pending" | "Processing" | "Completed" | "Failed" | "Refunded" | "Expired" | "KeyDestroyed" | string;
   createdAt: number;
   expirySeconds: number;
   payment: string;
@@ -319,6 +319,9 @@ const STUCK_MS = 15 * 60 * 1000;
 function phaseOf(j: ApiJob, now: number, plain: string | null, wiped: boolean, held: boolean): Phase {
   if (j.status === "None") return "missing";
   if (j.status === "Refunded") return "refunded";
+  // The 8-state contract reports these directly, so don't wait for the clock or the stuck timeout.
+  if (j.status === "Failed") return "failed";
+  if (j.status === "Expired" || j.status === "KeyDestroyed") return "destroyed";
   const exp = j.expiresAt ? j.expiresAt * 1000 : null;
   if (wiped || (exp && now >= exp)) return "destroyed";
   if (j.status === "Completed") return plain ? "readable" : held ? "working" : "locked";
