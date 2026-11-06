@@ -1,12 +1,10 @@
-// AI-assisted: Used Claude to write this file. HalftoneWordmarkFooter is from 21st.dev.
-"use client";
-
+// AI-assisted: Used Claude to write this file.
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import HalftoneWordmarkFooter from "@/components/ui/halftone-wordmark-footer";
-import { plexMono, plexSans } from "@/lib/fonts";
-import { FlutedGlass } from "./fluted-glass";
+import { Logo } from "./site-nav";
+
+const REPO = "https://github.com/dev22419/enigma-ai";
 
 const COLUMNS = [
   {
@@ -21,7 +19,7 @@ const COLUMNS = [
     title: "Build",
     links: [
       { label: "API", href: "/#api" },
-      { label: "GitHub", href: "https://github.com/dev22419/enigma-ai" },
+      { label: "GitHub", href: REPO },
       { label: "Open the app", href: "/chat" },
     ],
   },
@@ -38,37 +36,55 @@ const COLUMNS = [
 export function SiteFooter() {
   return (
     <>
-      <section className="relative isolate overflow-hidden text-frost">
-        <div className="aurora -z-10" aria-hidden="true" />
-        <FlutedGlass className="-z-10" rib={40} />
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_55%_55%_at_50%_45%,rgb(2_7_10/0.8),rgb(2_7_10/0.2)_70%,rgb(2_7_10/0)_90%)]" aria-hidden="true" />
-        <div className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pt-28 pb-24 text-center sm:px-8 md:pt-36">
-          <h2 className="display max-w-[16ch] text-[clamp(2.4rem,6vw,5.2rem)] text-balance">Try it with a sample record</h2>
-          <p className="mt-5 max-w-[32rem] text-[17px] text-frost/80">
-            The app comes with fictional medical, legal and financial documents, so you don&rsquo;t need real data to see it work.
-          </p>
+      <section className="section text-center text-frost">
+        <div className="shell">
+          <h2 className="heading">Try it with a sample record</h2>
+          <p className="lede">The app comes with fictional medical, legal and financial documents, so you don&rsquo;t need real data to see it work.</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
               <Link href="/chat">Open the app</Link>
             </Button>
             <Button asChild size="lg" variant="outline-frost">
-              <a href="https://github.com/dev22419/enigma-ai">Read the code</a>
+              <a href={REPO}>Read the code</a>
             </Button>
           </div>
         </div>
       </section>
-      <HalftoneWordmarkFooter
-        wordmark="enigma"
-        label="Enigma"
-        meta="Built at ETHGlobal Mumbai 2026. Testnets only."
-        columns={COLUMNS}
-        palette={{ background: "#02070a", ink: "#cfe4f2", warm: "#e59cf4" }}
-        fontFamily={plexSans.style.fontFamily}
-        fontWeight={700}
-        monoFamily={plexMono.style.fontFamily}
-        crop={0.22}
-        height="clamp(420px, 46vw, 620px)"
-      />
+
+      <footer className="mono-theme bg-black text-frost">
+        <div className="shell">
+          <div className="grid gap-10 border-t border-frost/12 py-14 sm:grid-cols-3 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
+            <div className="sm:col-span-3 lg:col-span-1">
+              <Link href="/" aria-label="Enigma home" className="inline-block">
+                <Logo />
+              </Link>
+              <p className="mt-4 max-w-[19rem] text-[14.5px] leading-relaxed text-frost-soft">Private AI for sensitive documents. The answer is destroyed on a timer you set.</p>
+            </div>
+
+            {COLUMNS.map((column) => (
+              <nav key={column.title} aria-label={column.title}>
+                <h3 className="text-[13px] text-frost-soft">{column.title}</h3>
+                <ul className="mt-4 space-y-2.5">
+                  {column.links.map((link) => (
+                    <li key={link.label}>
+                      <a href={link.href} className="text-[14.5px] text-frost/85 transition-colors hover:text-white">
+                        {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-frost/12 py-6 text-[13px] text-frost-soft">
+            <p>Built at ETHGlobal Mumbai 2026. Testnets only.</p>
+            <a href="#hero" className="transition-colors hover:text-frost">
+              Back to top
+            </a>
+          </div>
+        </div>
+      </footer>
     </>
   );
 }
