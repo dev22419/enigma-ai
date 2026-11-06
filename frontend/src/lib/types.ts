@@ -34,6 +34,7 @@ export interface CreateJobResponse {
   arkivEntityKey: string;
   keyId: string;
   expiresAt: number;
+  accessToken: string;
 }
 
 export interface JobReceipt {

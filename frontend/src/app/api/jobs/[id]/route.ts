@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { getJobOnChain } from "@/lib/contract";
 import { fetchFromArkiv } from "@/lib/arkiv";
 import { decrypt, parseEnvelope } from "@/lib/crypto";
@@ -6,8 +7,15 @@ import { destroyExpiredKeys, getActiveKey } from "@/lib/keystore";
 import { readStore } from "@/lib/store";
 import { safeErrorMessage } from "@/lib/redact";
 
+function tokenMatches(provided: string, stored: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(stored);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -26,6 +34,14 @@ export async function GET(
 
     const store = await readStore();
     const row = store.jobs[String(jobId)] ?? null;
+
+    if (row?.accessToken) {
+      const token = req.headers.get("x-access-token") || req.nextUrl.searchParams.get("token");
+      if (!token || !tokenMatches(token, row.accessToken)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     const keyRow = store.keys[String(jobId)] ?? null;
     const destruction = store.receipts[String(jobId)] ?? null;
 

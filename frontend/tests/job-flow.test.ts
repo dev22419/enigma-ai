@@ -83,7 +83,11 @@ function post(body: unknown) {
   return POST(new NextRequest("http://localhost/api/jobs", { method: "POST", body: JSON.stringify(body) }));
 }
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
-const get = (id: string) => getJob(new NextRequest(`http://localhost/api/jobs/${id}`), ctx(id));
+const get = (id: string, token?: string) => {
+  const headers: Record<string, string> = {};
+  if (token) headers["x-access-token"] = token;
+  return getJob(new NextRequest(`http://localhost/api/jobs/${id}`, { headers }), ctx(id));
+};
 const receipt = (id: string) => getReceipt(new NextRequest(`http://localhost/api/jobs/${id}/receipt`), ctx(id));
 const req = { taskType: "medical", ttl: 120, fileName: "report.txt", fileContent: DOC };
 const storeText = () => readFileSync(path.join(dataDir, "store.json"), "utf8");
@@ -117,8 +121,10 @@ describe("successful job cycle: nothing sensitive is kept (#63)", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.result).toBe(RESULT); // the caller gets the result once, in the response
+    expect(body.accessToken).toBeTruthy();
 
     const id = body.jobId as string;
+    const token = body.accessToken as string;
     const keyBase64 = (await readStore()).keys[id].keyMaterial as string;
     expect(keyBase64).toBeTruthy(); // the live key exists while the result is alive
 
@@ -133,7 +139,7 @@ describe("successful job cycle: nothing sensitive is kept (#63)", () => {
 
     // Let the key expire and destroy it through a normal request.
     await setKeyExpiry(id, now() - 1);
-    await get(id);
+    await get(id, token);
     const after = storeText();
     expect(after).not.toContain(keyBase64);
     expect((await readStore()).keys[id].keyMaterial).toBeNull();
@@ -148,15 +154,17 @@ describe("successful job cycle: nothing sensitive is kept (#63)", () => {
 
 describe("key destruction (#52)", () => {
   it("keeps the ciphertext byte-for-byte, but every API path stops returning the result", async () => {
-    const id = String((await (await post(req)).json()).jobId);
+    const created = await (await post(req)).json();
+    const id = String(created.jobId);
+    const token = created.accessToken as string;
     const ciphertext = m.arkiv.get(id)!.envelopeJson;
 
-    const live = await (await get(id)).json();
+    const live = await (await get(id, token)).json();
     expect(live.result).toBe(RESULT);
     expect(live.keyDestroyed).toBe(false);
 
     await setKeyExpiry(id, now() - 1);
-    const dead = await (await get(id)).json();
+    const dead = await (await get(id, token)).json();
     expect(dead.result).toBeNull();
     expect(dead.keyDestroyed).toBe(true);
     expect(dead.keyState).toBe("DESTROYED");
@@ -175,6 +183,14 @@ describe("key destruction (#52)", () => {
     m.chain.status = "None";
     expect((await get("999")).status).toBe(404);
     expect((await get("abc")).status).toBe(400);
+  });
+
+  it("rejects a request without a valid access token", async () => {
+    const created = await (await post(req)).json();
+    const id = String(created.jobId);
+    expect((await get(id)).status).toBe(401);
+    expect((await get(id, "wrong-token")).status).toBe(401);
+    expect((await get(id, created.accessToken)).status).toBe(200);
   });
 });
 

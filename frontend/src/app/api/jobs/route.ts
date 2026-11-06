@@ -4,7 +4,7 @@ import { runInference, getTeeAttestation } from "@/lib/og-inference";
 import { signJobCompletion, hashContent } from "@/lib/oracle-signer";
 import { createJobOnChain, completeJobOnChain, getJobOnChain } from "@/lib/contract";
 import { storeInArkiv } from "@/lib/arkiv";
-import { encrypt, serializeEnvelope } from "@/lib/crypto";
+import { encrypt, serializeEnvelope, randomToken } from "@/lib/crypto";
 import { createKey, setKeyExpiry, destroyKey } from "@/lib/keystore";
 import { withStore } from "@/lib/store";
 import { configProblems } from "@/lib/preflight";
@@ -60,12 +60,13 @@ export async function POST(req: NextRequest) {
 
   // 2. One-time key for this job. Provisional expiry; replaced by Arkiv's own below.
   const { keyId, key } = await createKey(id, now() + body.ttl + 120);
+  const accessToken = randomToken();
   await withStore((d) => {
     d.jobs[id] = {
       jobId: id, taskType: body.taskType, fileName: body.fileName, fileHash,
       inputCiphertextHash: null, resultHash: null, attestationHash: null, requestId: null,
       arkivEntityKey: null, createTxHash, completeTxHash: null, status: "processing",
-      error: null, createdAt: now(), expiresAt: null,
+      error: null, createdAt: now(), expiresAt: null, accessToken,
     };
   });
 
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest) {
       jobId: id, status: "completed", result: content, requestId: chatId,
       attestationHash, createTxHash, txHash: completeTxHash,
       arkivEntityKey: arkiv.entityKey, keyId, expiresAt: arkiv.expiresAtUnix,
+      accessToken,
     };
     return NextResponse.json(response);
   } catch (err) {

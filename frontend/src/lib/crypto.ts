@@ -85,3 +85,7 @@ export function serializeEnvelope(env: Envelope): string {
 export function parseEnvelope(raw: string): Envelope {
   return JSON.parse(raw) as Envelope;
 }
+
+export function randomToken(): string {
+  return randomBytes(32).toString("base64url");
+}

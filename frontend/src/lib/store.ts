@@ -29,6 +29,7 @@ export interface JobRow {
   error: string | null;
   createdAt: number;
   expiresAt: number | null;
+  accessToken?: string;
   // Encrypted input as stored on 0G Storage (ciphertext only). Absent when storage is not configured.
   inputStorage?: { rootHash: string; txHash: string } | null;
   // Set by the refund worker for jobs that failed after payment was locked.
