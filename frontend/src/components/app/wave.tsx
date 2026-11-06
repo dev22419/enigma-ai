@@ -9,7 +9,7 @@ void main() { gl_Position = vec4(p, 0.0, 1.0); }
 `;
 
 /**
- * A slow wave of colour rising from the bottom of the panel: charcoal, blue, lilac, hot pink, coral.
+ * A slow wave of colour rising from the bottom of the panel, in the hero light's colours: charcoal, teal, violet, magenta, orchid, champagne.
  * The colour climbs the sides and sits lower in the middle, and a few sine waves keep the curve moving.
  * uLift pushes the whole wave down, so reading screens keep a dark page with a glow along the bottom.
  */
@@ -23,16 +23,16 @@ vec3 hex(float r, float g, float b) { return vec3(r, g, b) / 255.0; }
 
 vec3 ramp(float d) {
   vec3 c = hex(28.0, 28.0, 28.0);
-  c = mix(c, hex(37.0, 46.0, 66.0), smoothstep(0.05, 0.14, d));
-  c = mix(c, hex(55.0, 95.0, 162.0), smoothstep(0.14, 0.26, d));
-  c = mix(c, hex(71.0, 117.0, 231.0), smoothstep(0.26, 0.34, d));
-  c = mix(c, hex(157.0, 138.0, 247.0), smoothstep(0.34, 0.43, d));
-  c = mix(c, hex(229.0, 156.0, 244.0), smoothstep(0.43, 0.49, d));
-  c = mix(c, hex(250.0, 94.0, 191.0), smoothstep(0.49, 0.66, d));
-  c = mix(c, hex(255.0, 58.0, 161.0), smoothstep(0.66, 0.71, d));
-  c = mix(c, hex(255.0, 36.0, 130.0), smoothstep(0.71, 0.77, d));
-  c = mix(c, hex(254.0, 44.0, 88.0), smoothstep(0.77, 0.88, d));
-  c = mix(c, hex(255.0, 75.0, 55.0), smoothstep(0.88, 1.0, d));
+  c = mix(c, hex(24.0, 42.0, 48.0), smoothstep(0.05, 0.14, d));
+  c = mix(c, hex(36.0, 96.0, 104.0), smoothstep(0.14, 0.26, d));
+  c = mix(c, hex(84.0, 62.0, 168.0), smoothstep(0.26, 0.34, d));
+  c = mix(c, hex(150.0, 48.0, 190.0), smoothstep(0.34, 0.43, d));
+  c = mix(c, hex(200.0, 56.0, 178.0), smoothstep(0.43, 0.49, d));
+  c = mix(c, hex(229.0, 156.0, 244.0), smoothstep(0.49, 0.66, d));
+  c = mix(c, hex(242.0, 200.0, 248.0), smoothstep(0.66, 0.71, d));
+  c = mix(c, hex(244.0, 226.0, 200.0), smoothstep(0.71, 0.77, d));
+  c = mix(c, hex(240.0, 214.0, 160.0), smoothstep(0.77, 0.88, d));
+  c = mix(c, hex(214.0, 190.0, 120.0), smoothstep(0.88, 1.0, d));
   return c;
 }
 
