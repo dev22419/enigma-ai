@@ -12,6 +12,8 @@
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.8",
     "@arkiv-network/sdk": "^1.0.1",
+    "@rainbow-me/rainbowkit": "^2.2.11",
+    "@tanstack/react-query": "^5.106.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ethers": "^6.17.0",
@@ -22,7 +24,8 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "^3.7.0",
-    "viem": "^2.57.16"
+    "viem": "^2.57.16",
+    "wagmi": "^3.7.11"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
