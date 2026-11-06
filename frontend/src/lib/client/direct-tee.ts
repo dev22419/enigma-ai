@@ -14,7 +14,7 @@ import { SYSTEM_PROMPTS, type TaskType } from "../constants";
 const ZG_RPC = "https://evmrpc-testnet.0g.ai";
 const ZG_CHAIN_ID = 16602;
 
-const MIN_LEDGER_DEPOSIT = 0.5;
+const MIN_LEDGER_DEPOSIT = 0.05;
 const MIN_PROVIDER_TRANSFER = BigInt(500_000_000_000_000); // 0.0005 0G
 
 export interface DirectInferenceResult {

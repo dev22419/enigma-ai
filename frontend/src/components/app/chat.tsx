@@ -123,19 +123,28 @@ export function Chat({ samples }: { samples: Sample[] }) {
     (async () => {
       try {
         const { getBroker, discoverTeeProviders, ensureProviderReady } = await import("@/lib/client/direct-tee");
+        console.log("[direct-tee] creating broker...");
         const broker = await getBroker();
+        console.log("[direct-tee] broker ready, discovering providers...");
         const providers = await discoverTeeProviders(broker);
+        console.log("[direct-tee] found", providers.length, "TeeML providers");
         if (cancelled) return;
         if (providers.length === 0) {
           setDirectTeeStatus("unavailable");
           return;
         }
         const teeProvider = providers[0];
-        await ensureProviderReady(broker, teeProvider.address);
-        if (cancelled) return;
+        console.log("[direct-tee] setting up provider", teeProvider.address);
+        try {
+          await ensureProviderReady(broker, teeProvider.address);
+        } catch (fundErr) {
+          console.warn("[direct-tee] provider funding skipped (will retry at inference):", fundErr);
+        }
         setDirectTee({ broker, provider: teeProvider });
         setDirectTeeStatus("ready");
-      } catch {
+        console.log("[direct-tee] ready —", teeProvider.model, "at", teeProvider.endpoint);
+      } catch (err) {
+        console.warn("[direct-tee] init failed:", err);
         if (!cancelled) setDirectTeeStatus("unavailable");
       }
     })();
