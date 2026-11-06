@@ -102,14 +102,14 @@ export function WalletBox() {
 
   if (SERVICE_PAID)
     return (
-      <p className="px-2 pt-2 text-[12px] leading-snug text-frost-soft/60 max-lg:hidden">
+      <p className="px-2 pt-2 text-[12px] leading-snug text-frost-soft/60">
         Demo mode: the service wallet pays for jobs.
       </p>
     );
 
   if (!mounted || !isConnected || !address)
     return (
-      <div className="px-2 pt-2 max-lg:hidden">
+      <div className="px-2 pt-2">
         <ConnectButton.Custom>
           {({ openConnectModal, mounted: ready }) => (
             <button onClick={openConnectModal} disabled={!ready} className="text-[13.5px] text-frost/80 underline decoration-frost/20 underline-offset-4 transition-colors hover:text-frost hover:decoration-orchid disabled:opacity-40">
@@ -122,7 +122,7 @@ export function WalletBox() {
     );
 
   return (
-    <div className="px-2 pt-2 max-lg:hidden">
+    <div className="px-2 pt-2">
       <ConnectButton.Custom>
         {({ openAccountModal, openConnectModal }) => (
           <>

@@ -30,7 +30,7 @@ export function Hero() {
 
         {/* Falls into the black of the page below */}
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(180deg,rgb(0_0_0/0),rgb(0_0_0/0.78)_58%,#000)]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[68%] bg-[linear-gradient(180deg,rgb(0_0_0/0),rgb(0_0_0/0.82)_58%,#000)] md:h-[46%]"
           aria-hidden="true"
         />
 

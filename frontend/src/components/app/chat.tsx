@@ -274,7 +274,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
   return (
-    <label className="relative flex min-w-0 items-center gap-1 rounded-full py-1 pr-2 pl-2.5 text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
+    <label className="relative flex min-w-0 items-center gap-1 rounded-full py-1 pr-1 pl-1.5 text-[12.5px] sm:pr-2 sm:pl-2.5 sm:text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
       <span className="sr-only">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
         {children}
@@ -428,7 +428,7 @@ function Composer({
           placeholder={att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste a document or attach one"}
           className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
         />
-        <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
+        <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
           <button
             onClick={() => file.current?.click()}
             className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
@@ -451,7 +451,7 @@ function Composer({
               </option>
             ))}
           </QuietSelect>
-          {gate.kind === "ok" && gate.price && <span className="num ml-auto mr-2 text-[12px] text-frost-soft/60">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
+          {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
           {gate.kind === "connect" ? (
             <ConnectPill className="ml-auto" />
           ) : (
@@ -462,7 +462,7 @@ function Composer({
               title={busy ? "Enigma is still working on your last message" : undefined}
               className={cn(
                 "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
-                !(gate.kind === "ok" && gate.price) && "ml-auto",
+                gate.kind === "ok" && gate.price ? "max-sm:ml-auto" : "ml-auto",
               )}
             >
               <ArrowUp className="size-4" strokeWidth={2.4} />
@@ -480,6 +480,11 @@ function Composer({
           }}
         />
       </div>
+      {gate.kind === "ok" && gate.price && (
+        <p className="num mt-2 px-1 text-[12px] text-frost-soft/60 sm:hidden">
+          {gate.price} USDT{left !== null ? `, ${left} left` : ""}
+        </p>
+      )}
       {err && (
         <p role="alert" className="mt-2 px-1 text-[13px] text-orchid">
           {err}

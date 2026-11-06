@@ -169,16 +169,18 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
         )}
 
         {gone && (
-          <div className="relative min-h-44">
+          <div>
             <p className="text-[13px] text-frost-soft">What&rsquo;s left of the answer</p>
-            <p className="mt-2 font-mono text-[12px] leading-relaxed break-all text-frost/30 sm:pr-64">
+            <p className="mt-2 font-mono text-[12px] leading-relaxed break-all text-frost/30">
               {vm.ciphertextPreview ?? "The Arkiv entity has expired, so even the ciphertext is gone."}
             </p>
             <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-frost-soft">
               Your browser wiped the only key that could open this. Nobody can read the answer again, including Enigma.
             </p>
-            {!vm.preview && <DecryptCheck id={vm.id} />}
-            <Stamp className="mt-6 inline-block sm:absolute sm:-top-3 sm:right-2 sm:mt-0" sub="KEY WIPED" />
+            <div className="mt-5 flex flex-wrap items-end justify-between gap-5">
+              {!vm.preview && <DecryptCheck id={vm.id} />}
+              <Stamp className="ml-auto" sub="KEY WIPED" />
+            </div>
           </div>
         )}
       </div>
@@ -215,16 +217,10 @@ function Trail({ vm }: { vm: JobVM }) {
         {rows.map((r, i) => (
           <li key={r.what} className={cn("flex items-center gap-4 px-4 py-3 text-[14px]", i > 0 && "border-t border-night-line", (r.state === "todo" || r.state === "skipped") && "opacity-50")}>
             <Check state={r.state === "active" && i > 0 && rows[i - 1].state !== "done" ? "todo" : r.state} />
-            <span className="min-w-0 flex-1 truncate">{r.what}</span>
+            <span className="min-w-0 flex-1">{r.what}</span>
             <span className="hidden font-mono text-[11px] text-frost-soft sm:inline">{r.where}</span>
             {r.value ? (
-              <button
-                onClick={() => navigator.clipboard?.writeText(r.value ?? "")}
-                title="Copy"
-                className="w-28 shrink-0 truncate text-right font-mono text-[11px] text-frost/70 hover:text-volt-lit sm:w-36"
-              >
-                {short(r.value, 8, 6)}
-              </button>
+              <CopyValue value={r.value} />
             ) : (
               <span className="w-28 shrink-0 sm:w-36" />
             )}
@@ -316,7 +312,7 @@ function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | n
 function DecryptCheck({ id }: { id: string }) {
   const [state, setState] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({ busy: false, msg: null, ok: false });
   return (
-    <div className="mt-5">
+    <div>
       <button
         onClick={async () => {
           setState({ busy: true, msg: null, ok: false });
@@ -324,11 +320,29 @@ function DecryptCheck({ id }: { id: string }) {
           setState({ busy: false, ok: r.ok, msg: r.ok ? "Decrypted. The key is still in this browser." : `Decryption failed: ${r.reason}` });
         }}
         disabled={state.busy}
-        className="rounded-md border border-frost/15 px-3 py-1.5 text-[13px] text-frost/80 transition-colors hover:border-frost/30 hover:text-frost disabled:opacity-50"
+        className="rounded-full border border-frost/15 px-4 py-1.5 text-[13px] text-frost/80 transition-colors hover:border-frost/30 hover:text-frost disabled:opacity-50"
       >
         {state.busy ? "Trying…" : "Try to decrypt it now"}
       </button>
       {state.msg && <p className={cn("mt-2 font-mono text-[12px]", state.ok ? "text-volt-lit" : "text-orchid")}>{state.msg}</p>}
     </div>
+  );
+}
+
+function CopyValue({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() =>
+        navigator.clipboard?.writeText(value).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1400);
+        })
+      }
+      title="Copy"
+      className="w-28 shrink-0 truncate text-right font-mono text-[11px] text-frost/70 hover:text-volt-lit sm:w-36"
+    >
+      {copied ? "Copied" : short(value, 8, 6)}
+    </button>
   );
 }
