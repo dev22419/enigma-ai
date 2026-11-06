@@ -5,6 +5,10 @@ interface ChatMessage {
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }
 
+// The model reasons before it answers, and that reasoning counts against this budget. 4096 was cut off
+// mid-answer on a one-page financial statement (finish_reason "length"), so leave real headroom.
+const MAX_OUTPUT_TOKENS = 8192;
+
 interface InferenceResult {
   chatId: string;
   content: string;
@@ -53,7 +57,7 @@ export async function runInference(
     body: JSON.stringify({
       model: ZG_MODEL,
       messages,
-      max_tokens: 4096,
+      max_tokens: MAX_OUTPUT_TOKENS,
       verify_tee: true,
     }),
   });
