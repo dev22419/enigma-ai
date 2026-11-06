@@ -1,4 +1,4 @@
-// Usage: npx hardhat run scripts/deploy.js --network whitechainTestnet
+// Usage: npx hardhat run scripts/deploy.js --network whitechain
 // Env: PROVIDER_ADDRESS (payee), ORACLE_SIGNER_ADDRESS (backend signer),
 //      optional USDT_ADDRESS (deploys MockUSDT when unset), QUERY_PRICE (default 500000), JOB_TIMEOUT_SECONDS (default 3600)
 const { ethers, network } = require("hardhat");
@@ -33,6 +33,12 @@ async function main() {
   const enigmaAddress = await enigma.getAddress();
   await (await enigma.addSigner(oracle)).wait();
   console.log("EnigmaAI deployed:", enigmaAddress, "signer registered:", oracle);
+  // The backend submits createJobFor/startProcessing/failJob/markKeyDestroyed from the deployer wallet,
+  // and those are signer-only, so the deployer has to be a registered signer as well.
+  if (deployer.address.toLowerCase() !== oracle.toLowerCase()) {
+    await (await enigma.addSigner(deployer.address)).wait();
+    console.log("signer registered:", deployer.address);
+  }
 
   const { chainId } = await ethers.provider.getNetwork();
   const out = path.join(__dirname, "..", "deployments");
