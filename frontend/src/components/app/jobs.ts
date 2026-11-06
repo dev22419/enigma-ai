@@ -3,6 +3,21 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import {
+  decryptEnvelope,
+  encryptText,
+  hashText,
+  hasKey,
+  loadKey,
+  loadToken,
+  loadWipeReceipt,
+  newJobKey,
+  parseEnvelope,
+  storeKey,
+  storeToken,
+  wipeKey,
+} from "@/lib/client/vault";
+
 /**
  * Client side of the Enigma API (POST /api/jobs, GET /api/jobs/[id], /receipt, /balance, /history).
  *
@@ -15,7 +30,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
  */
 
 export type Task = "medical" | "legal" | "financial";
-export type Phase = "working" | "readable" | "destroyed" | "failed" | "refunded" | "missing";
+/** locked: the job finished, but this browser session doesn't hold its key (e.g. a new tab session). */
+export type Phase = "working" | "readable" | "locked" | "destroyed" | "failed" | "refunded" | "missing";
 
 export const TTL_OPTIONS = [
   { label: "1 min", ttl: 60 },
@@ -67,7 +83,8 @@ export interface JobVM {
   arkivEntityKey: string | null;
   arkivEntityExists: boolean | null;
   inputStorage: { rootHash: string; txHash: string } | null;
-  keyState: string | null;
+  /** Where the key is: in this browser, wiped at expiry, or not here at all. */
+  keyState: "IN_BROWSER" | "WIPED" | "NOT_HERE" | null;
   ciphertextPreview: string | null;
   destruction: Destruction | null;
 }
@@ -164,25 +181,94 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export interface CreateJobResponse {
+/* Shapes from src/lib/types.ts on master (zero-storage proxy, #26). */
+interface CreateJobResponse {
   jobId: string;
-  status: string;
-  result: string | null;
-  requestId: string;
-  attestationHash: string;
   createTxHash: string;
-  txHash: string;
+  inputStorage: { rootHash: string; txHash: string } | null;
+  accessToken: string;
+}
+interface InferResponse {
+  result: string;
+  chatId: string;
+  resultHash: string;
+  attestationHash: string;
+  provider: string;
+  requestId: string;
+}
+interface StoreResultResponse {
+  completeTxHash: string;
   arkivEntityKey: string;
-  keyId: string;
   expiresAt: number;
 }
 
-export function createJob(body: { taskType: Task; ttl: number; fileName: string; fileContent: string }) {
-  return call<CreateJobResponse>("/api/jobs", {
+export type Stage = "encrypt" | "create" | "infer" | "seal" | "store";
+export const STAGE_LABEL: Record<Stage, string> = {
+  encrypt: "Encrypting in your browser",
+  create: "Opening the job on Whitechain",
+  infer: "Reading inside the 0G enclave",
+  seal: "Encrypting the answer in your browser",
+  store: "Storing the encrypted answer on Arkiv",
+};
+
+/** Answers decrypted (or received) in this tab, so they show without a round trip. Memory only. */
+const fresh = new Map<string, string>();
+
+function post<T>(url: string, body: unknown, token?: string) {
+  return call<T>(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { "x-access-token": token } : {}) },
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * One private job, driven from the browser:
+ * encrypt here, open the job with the ciphertext, read in the enclave, encrypt the answer here,
+ * store that ciphertext. The key never leaves this tab.
+ */
+export async function runJob(
+  input: { taskType: Task; ttl: number; fileName: string; content: string },
+  onStage: (s: Stage) => void,
+): Promise<{ jobId: string; expiresAt: number; result: string }> {
+  onStage("encrypt");
+  const fileHash = hashText(input.content);
+  const { key, keyId } = await newJobKey();
+  const encryptedFile = await encryptText(key, keyId, input.content, { objectType: "input", fileHash });
+
+  onStage("create");
+  const created = await post<CreateJobResponse>("/api/jobs", {
+    taskType: input.taskType,
+    ttl: input.ttl,
+    fileName: input.fileName,
+    fileHash,
+    encryptedFile,
+  });
+  const jobId = created.jobId;
+  await storeKey(jobId, key, keyId);
+  storeToken(jobId, created.accessToken);
+
+  try {
+    onStage("infer");
+    const inf = await post<InferResponse>("/api/infer", { taskType: input.taskType, content: input.content, fileName: input.fileName });
+
+    onStage("seal");
+    const encryptedResult = await encryptText(key, keyId, inf.result, { jobId, objectType: "result" });
+
+    onStage("store");
+    const stored = await post<StoreResultResponse>(
+      `/api/jobs/${jobId}/result`,
+      { encryptedResult, resultHash: inf.resultHash, attestationHash: inf.attestationHash, chatId: inf.chatId },
+      created.accessToken,
+    );
+    fresh.set(jobId, inf.result);
+    return { jobId, expiresAt: stored.expiresAt * 1000, result: inf.result };
+  } catch (e) {
+    // The job is open on-chain but won't complete: drop the key, and the contract refunds after its timeout.
+    wipeKey(jobId, Math.floor(Date.now() / 1000));
+    const err = e instanceof ApiError ? e : new ApiError(String(e), 0);
+    throw new ApiError(err.message, err.status, { ...err.body, jobId, refund: "after the contract's timeout" });
+  }
 }
 
 type ApiJob = {
@@ -201,11 +287,9 @@ type ApiJob = {
   createTxHash: string | null;
   completeTxHash: string | null;
   expiresAt: number | null;
-  result: string | null;
-  keyState: string | null;
-  keyDestroyed: boolean;
+  /** Raw ciphertext envelope from Arkiv, only when the access token matches. */
+  encryptedResult: string | null;
   arkivEntityExists: boolean;
-  ciphertextPreview: string | null;
   destruction: (Omit<Destruction, "valid"> & { valid?: boolean }) | null;
 };
 
@@ -219,7 +303,6 @@ export type ApiReceipt = {
   fileHash: string;
   arkivEntityKey: string | null;
   expiresAt: number | null;
-  keyDestroyed: boolean;
   destruction: (Omit<Destruction, "valid"> & { jobId: string; keyId: string; expiryTimestamp: number }) | null;
   destructionReceiptValid: boolean | null;
 };
@@ -231,29 +314,34 @@ export const getBalance = (address: string) =>
 const ZERO = /^0x0+$/;
 const nz = (h: string | null | undefined) => (h && !ZERO.test(h) ? h : null);
 
-function phaseOf(j: ApiJob, now: number): Phase {
+const STUCK_MS = 15 * 60 * 1000;
+
+function phaseOf(j: ApiJob, now: number, plain: string | null, wiped: boolean, held: boolean): Phase {
   if (j.status === "None") return "missing";
   if (j.status === "Refunded") return "refunded";
-  if (j.keyDestroyed || j.keyState === "EXPIRY_PENDING") return "destroyed";
-  if (j.status === "Completed") {
-    if (j.result) return "readable";
-    if (j.expiresAt && j.expiresAt * 1000 <= now) return "destroyed";
-    return j.keyState === "ACTIVE" ? "working" : "destroyed";
-  }
+  const exp = j.expiresAt ? j.expiresAt * 1000 : null;
+  if (wiped || (exp && now >= exp)) return "destroyed";
+  if (j.status === "Completed") return plain ? "readable" : held ? "working" : "locked";
+  // Pending for a long time means the job never completed; the contract refunds it after its timeout.
+  if (j.createdAt && now - j.createdAt * 1000 > STUCK_MS) return "failed";
   return "working";
 }
 
-function fromApi(j: ApiJob, entry: IndexEntry | undefined, now: number): JobVM {
+function fromApi(j: ApiJob, entry: IndexEntry | undefined, now: number, plain: string | null): JobVM {
+  const id = String(j.jobId);
+  const wipe = loadWipeReceipt(id);
+  const held = hasKey(id);
+  const env = j.encryptedResult ? parseEnvelope(j.encryptedResult) : null;
   return {
-    id: String(j.jobId),
+    id,
     preview: false,
-    phase: phaseOf(j, now),
+    phase: phaseOf(j, now, plain, !!wipe, held),
     fileName: entry?.fileName ?? `Job ${j.jobId}`,
     task: entry?.task ?? null,
     ttl: j.expirySeconds || entry?.ttl || 0,
     createdAt: j.createdAt ? j.createdAt * 1000 : entry?.createdAt ?? now,
     expiresAt: j.expiresAt ? j.expiresAt * 1000 : entry?.expiresAt ?? null,
-    result: j.result,
+    result: wipe ? null : plain,
     user: j.user,
     payment: j.payment,
     fileHash: nz(j.fileHash),
@@ -265,9 +353,13 @@ function fromApi(j: ApiJob, entry: IndexEntry | undefined, now: number): JobVM {
     arkivEntityKey: j.arkivEntityKey,
     arkivEntityExists: j.arkivEntityExists,
     inputStorage: j.inputStorage,
-    keyState: j.keyState,
-    ciphertextPreview: j.ciphertextPreview,
-    destruction: j.destruction ? { ...j.destruction, valid: j.destruction.valid ?? null } : null,
+    keyState: wipe ? "WIPED" : held ? "IN_BROWSER" : "NOT_HERE",
+    ciphertextPreview: env ? env.ct.slice(0, 160) : null,
+    destruction: wipe
+      ? { destructionTimestamp: wipe.destructionTimestamp, receiptHash: wipe.receiptHash, signer: "this browser", valid: true }
+      : j.destruction
+        ? { ...j.destruction, valid: j.destruction.valid ?? null }
+        : null,
   };
 }
 
@@ -415,7 +507,7 @@ function fromPreview(e: IndexEntry, now: number): JobVM {
     arkivEntityKey: done ? h.arkivEntityKey ?? null : null,
     arkivEntityExists: phase === "readable",
     inputStorage: h.root ? { rootHash: h.root, txHash: h.createTxHash } : null,
-    keyState: phase === "destroyed" ? "DESTROYED" : "ACTIVE",
+    keyState: phase === "destroyed" ? "WIPED" : "IN_BROWSER",
     ciphertextPreview: done ? h.cipher ?? null : null,
     destruction:
       phase === "destroyed"
@@ -426,24 +518,39 @@ function fromPreview(e: IndexEntry, now: number): JobVM {
 
 // ------------------------------------------------------------------ hooks
 
-/** Live view of one job. Polls the API while the job can still change. */
+/** Live view of one job. Polls the API while the job can still change, and decrypts in this tab. */
 export function useJobVM(id: string) {
   const all = useIndex();
   const now = useNow();
   const entry = all?.find((e) => e.id === id);
   const preview = id.startsWith("preview-");
   const [api, setApi] = useState<ApiJob | null>(null);
+  const [plain, setPlain] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [receipt, setReceipt] = useState<ApiReceipt | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const j = await call<ApiJob>(`/api/jobs/${id}`);
+      const token = loadToken(id);
+      const j = await call<ApiJob>(`/api/jobs/${id}`, token ? { headers: { "x-access-token": token } } : undefined);
       setApi(j);
       setError(null);
       if (j.expiresAt) patchEntry(String(j.jobId), { expiresAt: j.expiresAt * 1000, user: j.user });
       if (j.status === "Completed") setReceipt(await getReceipt(id).catch(() => null));
+      // Decrypt here, with the key only this tab holds. No key, no answer.
+      const k = loadWipeReceipt(id) ? null : await loadKey(id);
+      if (k && j.encryptedResult) {
+        try {
+          const text = await decryptEnvelope(k.key, j.encryptedResult, { jobId: id, objectType: "result" });
+          fresh.set(id, text);
+          setPlain(text);
+        } catch {
+          setPlain(null);
+        }
+      } else {
+        setPlain(fresh.get(id) && k ? fresh.get(id)! : null);
+      }
       return j;
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(String(e), 0));
@@ -457,31 +564,57 @@ export function useJobVM(id: string) {
     const loop = async () => {
       const j = await load();
       if (stop) return;
-      const settled = j && (j.keyDestroyed || j.status === "Refunded" || j.status === "None");
+      const settled = j && (loadWipeReceipt(id) || j.status === "Refunded" || j.status === "None");
       if (settled) return;
       // Poll faster near expiry so the destruction shows up promptly.
       const msLeft = j?.expiresAt ? j.expiresAt * 1000 - Date.now() : Infinity;
-      timer.current = setTimeout(loop, msLeft < 15000 ? 2500 : 8000);
+      timer.current = setTimeout(loop, msLeft < 15000 ? 2000 : 8000);
     };
     loop();
     return () => {
       stop = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [preview, load]);
+  }, [preview, load, id]);
 
   if (!now || all === null) return { vm: null, error: null, receipt: null, loading: true };
   if (preview) {
     if (!entry) return { vm: null, error: new ApiError("This preview isn't in this browser any more.", 404), receipt: null, loading: false };
     return { vm: fromPreview(entry, now), error: null, receipt: null, loading: false };
   }
-  return { vm: api ? fromApi(api, entry, now) : null, error, receipt, loading: !api && !error };
+  const shown = plain ?? (hasKey(id) ? fresh.get(id) ?? null : null);
+  return { vm: api ? fromApi(api, entry, now, shown) : null, error, receipt, loading: !api && !error };
+}
+
+/** Tries to decrypt a job's answer right now. Used to show that, once the key is wiped, it can't be done. */
+export async function tryDecrypt(id: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const k = await loadKey(id);
+  if (!k) return { ok: false, reason: "No key for this job exists in this browser, so the ciphertext can't be opened." };
+  const token = loadToken(id);
+  try {
+    const j = await call<ApiJob>(`/api/jobs/${id}`, token ? { headers: { "x-access-token": token } } : undefined);
+    if (!j.encryptedResult) return { ok: false, reason: "Arkiv no longer holds the ciphertext." };
+    await decryptEnvelope(k.key, j.encryptedResult, { jobId: id, objectType: "result" });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Wipes the keys of every job in this browser whose lifespan has ended (task #74). */
+export function wipeExpired(all: IndexEntry[], now: number) {
+  let wiped = 0;
+  for (const e of all) {
+    if (e.preview || !e.expiresAt || now < e.expiresAt) continue;
+    if (hasKey(e.id) && wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
+  }
+  return wiped;
 }
 
 /** Index entries with a cheap local phase, for lists. */
 export function localPhase(e: IndexEntry, now: number): Phase {
   if (e.preview) return fromPreview(e, now).phase;
-  if (e.expiresAt && now >= e.expiresAt) return "destroyed";
+  if (loadWipeReceipt(e.id) || (e.expiresAt && now >= e.expiresAt)) return "destroyed";
   return e.expiresAt ? "readable" : "working";
 }
 
