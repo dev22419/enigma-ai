@@ -2,17 +2,17 @@
 "use client";
 
 import { BorderBeam } from "border-beam";
-import { ArrowUp, Check, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
+import { ArrowUp, FileText, ImageIcon, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Select } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { useSignMessage } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
+import { guessTask } from "@/lib/guess-task";
 import { withImageNote } from "@/lib/image-note";
 import { cn } from "@/lib/utils";
 import { DotOrb, OrbMark } from "./orb";
@@ -282,46 +282,86 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 /* ================================================================== composer */
 
-/** The composer's small menus, styled like the rest of the app in place of the browser's own list. */
-function QuietSelect({ value, onChange, label, options }: { value: string; onChange: (v: string) => void; label: string; options: { value: string; label: string }[] }) {
+const WHEEL_ROW = 22;
+const WHEEL_HEIGHT = 46;
+
+/** The lifespan picker: a small wheel with the choice in the middle and its neighbours half out of view. */
+function TimerWheel({ value, onChange, options }: { value: number; onChange: (ttl: number) => void; options: { ttl: number; label: string }[] }) {
+  const box = useRef<HTMLDivElement>(null);
+  const lastWheel = useRef(0);
+  const drag = useRef<{ y: number; moved: boolean } | null>(null);
+  const index = Math.max(0, options.findIndex((o) => o.ttl === value));
+
+  const step = (by: number) => {
+    const next = Math.min(Math.max(index + by, 0), options.length - 1);
+    if (next !== index) onChange(options[next].ttl);
+  };
+
+  // React's wheel handler is passive, and the page mustn't scroll while the wheel turns
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.timeStamp - lastWheel.current < 110) return;
+      lastWheel.current = e.timeStamp;
+      step(e.deltaY > 0 ? 1 : -1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+
   return (
-    <Select.Root value={value} onValueChange={onChange}>
-      <Select.Trigger
-        aria-label={label}
-        className="group flex min-w-0 cursor-pointer items-center gap-1 rounded-full py-1 pr-1 pl-1.5 text-[12.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-frost/40 data-[state=open]:bg-frost/[0.08] data-[state=open]:text-frost sm:pr-2 sm:pl-2.5 sm:text-[13.5px]"
+    <div className="flex min-w-0 items-center gap-1.5 pl-1 text-[13.5px]">
+      <span className="shrink-0 text-frost/60">Destroy after</span>
+      <div
+        ref={box}
+        role="spinbutton"
+        tabIndex={0}
+        aria-label="Destroy the answer after"
+        aria-valuemin={0}
+        aria-valuemax={options.length - 1}
+        aria-valuenow={index}
+        aria-valuetext={options[index]?.label}
+        title="Scroll to change the time"
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            step(e.key === "ArrowDown" ? 1 : -1);
+          }
+        }}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          drag.current = { y: e.clientY, moved: false };
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d || Math.abs(e.clientY - d.y) < WHEEL_ROW * 0.7) return;
+          step(e.clientY < d.y ? 1 : -1);
+          drag.current = { y: e.clientY, moved: true };
+        }}
+        onPointerUp={(e) => {
+          const d = drag.current;
+          drag.current = null;
+          if (!d || d.moved) return;
+          // A tap on a half-hidden neighbour picks it
+          const r = e.currentTarget.getBoundingClientRect();
+          const y = e.clientY - r.top;
+          if (y < r.height * 0.3) step(-1);
+          else if (y > r.height * 0.7) step(1);
+        }}
+        className="relative shrink-0 cursor-ns-resize touch-none overflow-hidden rounded-[10px] select-none focus-visible:ring-1 focus-visible:ring-frost/40 focus-visible:outline-none [mask-image:linear-gradient(rgb(0_0_0/0.2),#000_38%,#000_62%,rgb(0_0_0/0.2))]"
+        style={{ height: WHEEL_HEIGHT, width: 62 }}
       >
-        <span className="min-w-0 truncate">
-          <Select.Value />
-        </span>
-        <Select.Icon asChild>
-          <ChevronDown className="size-3.5 shrink-0 opacity-60 transition-transform group-data-[state=open]:rotate-180" />
-        </Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content
-          position="popper"
-          sideOffset={8}
-          align="start"
-          collisionPadding={10}
-          className="app-theme z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[14px] bg-[#282826] p-1 text-frost shadow-[0_12px_40px_rgb(0_0_0/0.45),inset_0_0_0_1px_rgb(255_255_255/0.09)]"
-        >
-          <Select.Viewport>
-            {options.map((o) => (
-              <Select.Item
-                key={o.value}
-                value={o.value}
-                className="flex cursor-pointer items-center justify-between gap-5 rounded-[10px] px-2.5 py-1.5 text-[13.5px] whitespace-nowrap text-frost/75 outline-none select-none data-[highlighted]:bg-frost/[0.08] data-[highlighted]:text-frost data-[state=checked]:text-frost"
-              >
-                <Select.ItemText>{o.label}</Select.ItemText>
-                <Select.ItemIndicator>
-                  <Check className="size-3.5 text-frost/70" strokeWidth={2.2} />
-                </Select.ItemIndicator>
-              </Select.Item>
-            ))}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
+        <div className="transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: `translateY(${(WHEEL_HEIGHT - WHEEL_ROW) / 2 - index * WHEEL_ROW}px)` }}>
+          {options.map((o, i) => (
+            <div key={o.ttl} className={cn("grid place-items-center whitespace-nowrap transition-colors", i === index ? "font-medium text-frost" : "text-frost/55")} style={{ height: WHEEL_ROW }}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -392,15 +432,17 @@ function Composer({
   function submit() {
     if (!canSend) return;
     const typed = text.trim();
+    // The document's own words pick the instructions. An image only has its name and the note to go on.
+    const picked = guessTask([att?.name, att?.kind === "image" ? "" : att?.content, typed].join(" ")) ?? task;
     let out: Outgoing;
     if (att?.kind === "image") {
-      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, task, ttl, text: typed, attachment: att };
+      out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, task: picked, ttl, text: typed, attachment: att };
     } else if (att) {
       // The model treats everything as document content, so notes travel with the document, clearly marked.
       const content = typed ? `${att.content}\n\nNOTES FROM THE SENDER\n${typed}` : att.content;
-      out = { label: att.name, content, fileName: att.name, task, ttl, text: typed, attachment: att };
+      out = { label: att.name, content, fileName: att.name, task: picked, ttl, text: typed, attachment: att };
     } else {
-      out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", task, ttl, text: typed, attachment: null };
+      out = { label: typed.split("\n")[0].slice(0, 60) || "Message", content: typed, fileName: "message.txt", task: picked, ttl, text: typed, attachment: null };
     }
     onSend(out);
   }
@@ -480,13 +522,7 @@ function Composer({
             >
               <Paperclip className="size-4" />
             </button>
-            <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))} options={TASKS.map((t) => ({ value: t.key, label: t.name }))} />
-            <QuietSelect
-              label="Destroy the answer after"
-              value={String(ttl)}
-              onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}
-              options={LIFESPANS.map((o) => ({ value: String(o.ttl), label: `Destroy after ${o.label}` }))}
-            />
+            <TimerWheel value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: v }))} options={LIFESPANS} />
             {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
             {gate.kind === "connect" ? (
               <ConnectPill className="ml-auto" />
