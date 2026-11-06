@@ -9,7 +9,7 @@ import { Guilloche } from "@/components/landing/guilloche";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Fuse, PhaseChip, Ref, Stamp, TaskChip } from "./bits";
-import { countdown, getReceipt, sections, short, ttlLabel, useJobVM, useNow, when, type ApiReceipt, type JobVM } from "./jobs";
+import { countdown, getReceipt, sections, short, tryDecrypt, ttlLabel, useJobVM, useNow, when, type ApiReceipt, type JobVM } from "./jobs";
 
 export function JobView({ id }: { id: string }) {
   const { vm, error, receipt, loading } = useJobVM(id);
@@ -80,6 +80,19 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
       </section>
     );
 
+  if (vm.phase === "locked")
+    return (
+      <section className="mt-8 rounded-[16px] border border-night-line bg-night-2 p-6">
+        <p className="text-[18px] font-semibold">The key for this answer isn&rsquo;t in this browser</p>
+        <p className="mt-2 max-w-[38rem] text-[14.5px] leading-relaxed text-frost-soft">
+          Keys live only in the browser session that sent the job. This one doesn&rsquo;t have it, so the answer stays
+          encrypted here, which is how it should be.
+        </p>
+        {vm.ciphertextPreview && <p className="mt-4 font-mono text-[12px] leading-relaxed break-all text-frost/30">{vm.ciphertextPreview}</p>}
+        <DecryptCheck id={vm.id} />
+      </section>
+    );
+
   if (vm.phase === "failed" || vm.phase === "refunded" || vm.phase === "missing")
     return (
       <section className="mt-8 rounded-[16px] border border-night-line bg-night-2 p-6">
@@ -89,7 +102,9 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
         <p className="mt-2 max-w-[36rem] text-[14.5px] leading-relaxed text-frost-soft">
           {vm.phase === "refunded"
             ? "Something failed after payment was locked, so the key was wiped and the contract returned the payment."
-            : "Nothing was stored for it."}
+            : vm.phase === "failed"
+              ? "The job was opened but never completed. The contract refunds the payment after its timeout."
+              : "Nothing was stored for it."}
         </p>
       </section>
     );
@@ -160,8 +175,9 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
               {vm.ciphertextPreview ?? "The Arkiv entity has expired, so even the ciphertext is gone."}
             </p>
             <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-frost-soft">
-              The key that could open this was wiped. Nobody can read the answer again, including Enigma.
+              Your browser wiped the only key that could open this. Nobody can read the answer again, including Enigma.
             </p>
+            {!vm.preview && <DecryptCheck id={vm.id} />}
             <Stamp className="mt-6 inline-block sm:absolute sm:-top-3 sm:right-2 sm:mt-0" sub="KEY WIPED" />
           </div>
         )}
@@ -264,7 +280,7 @@ function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | n
                 <Ref paper label="Arkiv entity" value={vm.arkivEntityKey} display={short(vm.arkivEntityKey)} />
                 <Ref paper label="Expires" value={vm.expiresAt ? when(vm.expiresAt) : null} />
                 <Ref paper label="Key destroyed" value={vm.destruction ? when(vm.destruction.destructionTimestamp * 1000) : null} />
-                <Ref paper label="Signed by" value={vm.destruction?.signer ?? null} display={short(vm.destruction?.signer, 6, 4)} />
+                <Ref paper label="Wiped by" value={vm.destruction?.signer ?? null} display={vm.destruction?.signer?.startsWith("0x") ? short(vm.destruction.signer, 6, 4) : vm.destruction?.signer} />
               </dl>
               <div className="mt-5 flex items-end justify-between gap-3">
                 <p className="font-mono text-[9.5px] leading-relaxed text-ink-soft">
@@ -285,5 +301,26 @@ function CertificateDrawer({ vm, receipt }: { vm: JobVM; receipt: ApiReceipt | n
         The receipt holds hashes, ids and timestamps only. It never contains the document or the answer.
       </p>
     </aside>
+  );
+}
+
+/** Task #76: show, live, that the ciphertext can't be opened once the key is gone. */
+function DecryptCheck({ id }: { id: string }) {
+  const [state, setState] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({ busy: false, msg: null, ok: false });
+  return (
+    <div className="mt-5">
+      <button
+        onClick={async () => {
+          setState({ busy: true, msg: null, ok: false });
+          const r = await tryDecrypt(id);
+          setState({ busy: false, ok: r.ok, msg: r.ok ? "Decrypted. The key is still in this browser." : `Decryption failed: ${r.reason}` });
+        }}
+        disabled={state.busy}
+        className="rounded-md border border-frost/15 px-3 py-1.5 text-[13px] text-frost/80 transition-colors hover:border-frost/30 hover:text-frost disabled:opacity-50"
+      >
+        {state.busy ? "Trying…" : "Try to decrypt it now"}
+      </button>
+      {state.msg && <p className={cn("mt-2 font-mono text-[12px]", state.ok ? "text-volt-lit" : "text-melon")}>{state.msg}</p>}
+    </div>
   );
 }
