@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signJobCompletion } from "@/lib/oracle-signer";
-import { getJobOnChain, completeJobOnChain, startProcessingOnChain, failJobOnChain } from "@/lib/contract";
+import { getJobOnChain, completeJobOnChain, startProcessingOnChain } from "@/lib/contract";
 import { storeInArkiv } from "@/lib/arkiv";
 import { tokensEqual } from "@/lib/crypto";
 import { withStore, readStore } from "@/lib/store";
@@ -114,12 +114,11 @@ export async function POST(
     return NextResponse.json(response);
   } catch (err) {
     const reason = safeErrorMessage(err);
-    await failJobOnChain(jobId, reason.slice(0, 128)).catch(() => {});
+    // The answer was already delivered by /api/infer, so this job must not be failed: a failed job is refundable
+    // at once, which would let someone read the answer and then get their money back. It stays "processing": the
+    // browser may retry this call, and otherwise the server completes the job itself (lib/settle.ts).
     await withStore((d) => {
-      if (d.jobs[id]) {
-        d.jobs[id].status = "failed";
-        d.jobs[id].error = reason;
-      }
+      if (d.jobs[id]) d.jobs[id].error = reason;
     });
     return fail(502, reason);
   }
