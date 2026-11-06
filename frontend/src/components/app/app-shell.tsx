@@ -4,11 +4,12 @@
 import { SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 
 import { Logo } from "@/components/landing/site-nav";
 import { cn } from "@/lib/utils";
-import { countdown, getBalance, knownAddress, localPhase, threadsOf, useIndex, useNow, wipeExpired, type Thread } from "./jobs";
+import { countdown, localPhase, threadsOf, useIndex, useNow, wipeExpired, type Thread } from "./jobs";
+import { WalletBox } from "./wallet";
 
 /** Wipes each job's key from this browser the moment its lifespan ends (task #74). */
 function KeyWiper() {
@@ -121,27 +122,8 @@ function Sidebar() {
             {label}
           </Link>
         ))}
-        <Balance address={knownAddress(index)} />
+        <WalletBox />
       </div>
     </aside>
-  );
-}
-
-function Balance({ address }: { address: string | null }) {
-  const [balance, setBalance] = useState<string | null>(null);
-  useEffect(() => {
-    if (!address) return;
-    let off = false;
-    getBalance(address)
-      .then((b) => !off && setBalance(Number(b.balance).toFixed(2)))
-      .catch(() => undefined);
-    return () => {
-      off = true;
-    };
-  }, [address]);
-  return (
-    <p className="px-2 pt-2 text-[12px] text-frost-soft/60 max-lg:hidden">
-      Balance: <span className="num text-frost/80">{balance ? `${balance} USDT` : "shown after your first job"}</span>
-    </p>
   );
 }

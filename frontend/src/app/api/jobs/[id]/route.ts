@@ -61,6 +61,7 @@ export async function GET(
       encryptedResult,
       arkivEntityExists: arkivExists,
       destruction,
+      keyWipe: row?.keyWipe ?? null,
     });
   } catch (err) {
     const message = safeErrorMessage(err);
