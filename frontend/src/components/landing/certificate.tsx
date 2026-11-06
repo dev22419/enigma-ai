@@ -32,7 +32,7 @@ export function Seal({ className = "size-28 text-night" }: { className?: string 
       <circle cx="60" cy="60" r="57" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="60" cy="60" r="53" fill="none" stroke="currentColor" strokeWidth="0.75" strokeDasharray="1.5 2.5" />
       <circle cx="60" cy="60" r="34" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <text fontSize="7.4" fontFamily="var(--font-jetbrains)" letterSpacing="1.6" fill="currentColor">
+      <text fontSize="7.4" fontFamily="var(--font-plex-mono)" letterSpacing="1.6" fill="currentColor">
         <textPath href={`#${id}`}>{text + text}</textPath>
       </text>
       <circle cx="60" cy="60" r="27" fill="var(--volt)" />

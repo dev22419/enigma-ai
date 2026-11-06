@@ -21,7 +21,7 @@ export function Hero() {
         <h1 className="display max-w-[15ch] text-[clamp(2.9rem,7.6vw,6.6rem)] text-balance">
           AI for documents that can&rsquo;t leak.
         </h1>
-        <p className="mt-7 max-w-[40rem] text-[17px] leading-[1.6] text-frost/80 sm:text-[18px]">
+        <p className="mt-7 max-w-[40rem] text-[17px] leading-[1.6] text-balance text-frost/80 sm:text-[18px]">
           Upload a medical record, a contract or a bank statement. 0G&rsquo;s model reads it inside a sealed
           enclave, your browser encrypts the answer with a key only it holds, and when your timer runs out the key
           is destroyed. Whitechain keeps a receipt that proves it.

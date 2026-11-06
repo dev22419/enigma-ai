@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import HalftoneWordmarkFooter from "@/components/ui/halftone-wordmark-footer";
-import { archivo, jetbrains } from "@/lib/fonts";
+import { plexMono, plexSans } from "@/lib/fonts";
 import { FlutedGlass } from "./fluted-glass";
 
 const COLUMNS = [
@@ -63,9 +63,9 @@ export function SiteFooter() {
         meta="Built at ETHGlobal Mumbai 2026. Testnets only."
         columns={COLUMNS}
         palette={{ background: "#02070a", ink: "#cfe4f2", warm: "#fc734d" }}
-        fontFamily={archivo.style.fontFamily}
-        fontWeight={900}
-        monoFamily={jetbrains.style.fontFamily}
+        fontFamily={plexSans.style.fontFamily}
+        fontWeight={700}
+        monoFamily={plexMono.style.fontFamily}
         crop={0.22}
         height="clamp(420px, 46vw, 620px)"
       />

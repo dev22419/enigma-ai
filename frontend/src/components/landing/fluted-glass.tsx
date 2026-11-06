@@ -202,8 +202,8 @@ export function FlutedGlass({ className, rib = 34, focus = 1 }: { className?: st
     function resize() {
       if (!canvas || !parent || !gl) return;
       const r = parent.getBoundingClientRect();
-      // Below device resolution: the glass blurs everything anyway, and it keeps the GPU cool
-      scale = Math.min(window.devicePixelRatio || 1, 1.5) * 0.75;
+      // Full device resolution, capped at 2x, so the rib edges stay sharp
+      scale = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(r.width * scale));
       canvas.height = Math.max(1, Math.round(r.height * scale));
       canvas.style.width = `${r.width}px`;
