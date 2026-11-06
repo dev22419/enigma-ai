@@ -17,11 +17,20 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
+    /// @dev Job lifecycle. `createJob` locks the payment in the same transaction, so the product's
+    ///      CREATED and PAID steps are one on-chain step (`Pending`).
+    ///        Pending -> Processing -> Completed -> Expired -> KeyDestroyed     (happy path)
+    ///        Pending | Processing -> Failed -> Refunded                         (provider failed)
+    ///        Pending | Processing -> Refunded                                   (deadline passed)
     enum Status {
-        None,
-        Pending,
-        Completed,
-        Refunded
+        None, // 0: does not exist
+        Pending, // 1: created, payment locked
+        Processing, // 2: a signer acknowledged the job; inference is running
+        Completed, // 3: result attested, payment released to the provider
+        Failed, // 4: a signer reported the job failed; payment is refundable now
+        Refunded, // 5: payment returned to the user's balance
+        Expired, // 6: the result's lifetime ended
+        KeyDestroyed // 7: a signer attested the job's encryption key was destroyed
     }
 
     struct Job {
