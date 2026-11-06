@@ -101,7 +101,7 @@ export function Certificate() {
           <p className="lede">Hashes and timestamps only. Show an auditor the work without showing the document.</p>
         </div>
 
-        <div className="mt-10 grid items-start gap-3 md:mt-12 lg:grid-cols-2">
+        <div className="mt-10 grid grid-cols-[minmax(0,1fr)] items-start gap-3 md:mt-12 lg:grid-cols-2">
           {/* The receipt prints out of the slot, then gets stamped */}
           <figure className="panel p-6 sm:p-8">
             <div className="h-1.5 rounded-full bg-night-3 shadow-[inset_0_1px_0_rgb(238_238_238/0.12)]" aria-hidden="true" />
