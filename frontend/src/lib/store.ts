@@ -33,6 +33,7 @@ export interface JobRow {
   inputStorage?: { rootHash: string; txHash: string } | null;
   // Set by the refund worker for jobs that failed after payment was locked.
   refund?: { state: "REFUNDED" | "NOT_REQUIRED"; txHash: string | null; at: number } | null;
+  accessToken?: string;
 }
 
 export interface DestructionReceipt {

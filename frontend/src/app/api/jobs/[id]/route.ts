@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobOnChain } from "@/lib/contract";
 import { fetchFromArkiv } from "@/lib/arkiv";
-import { decrypt, parseEnvelope } from "@/lib/crypto";
-import { destroyExpiredKeys, getActiveKey } from "@/lib/keystore";
+import { tokensEqual } from "@/lib/crypto";
 import { readStore } from "@/lib/store";
 import { safeErrorMessage } from "@/lib/redact";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -17,8 +16,6 @@ export async function GET(
       return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
     }
 
-    await destroyExpiredKeys();
-
     const job = await getJobOnChain(jobId);
     if (job.status === "None") {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -26,29 +23,21 @@ export async function GET(
 
     const store = await readStore();
     const row = store.jobs[String(jobId)] ?? null;
-    const keyRow = store.keys[String(jobId)] ?? null;
     const destruction = store.receipts[String(jobId)] ?? null;
 
-    let result: string | null = null;
+    let encryptedResult: string | null = null;
     let arkivExists = false;
-    let ciphertextPreview: string | null = null;
     let expiresAt = row?.expiresAt ?? null;
 
-    if (job.status === "Completed") {
+    const token = req.headers.get("x-access-token") ?? "";
+    const authorized = !!row?.accessToken && !!token && tokensEqual(token, row.accessToken);
+
+    if (job.status === "Completed" && authorized) {
       const arkiv = await fetchFromArkiv(String(jobId)).catch(() => null);
       arkivExists = !!arkiv?.exists;
       if (arkiv?.exists && arkiv.envelopeJson) {
         expiresAt = arkiv.expiresAtUnix;
-        const env = parseEnvelope(arkiv.envelopeJson);
-        ciphertextPreview = env.ciphertext.slice(0, 96);
-        const active = await getActiveKey(String(jobId));
-        if (active) {
-          try {
-            result = decrypt(active.key, env, { jobId: String(jobId), objectType: "result" }).toString("utf8");
-          } finally {
-            active.key.fill(0);
-          }
-        }
+        encryptedResult = arkiv.envelopeJson;
       }
     }
 
@@ -69,11 +58,8 @@ export async function GET(
       createTxHash: row?.createTxHash ?? null,
       completeTxHash: row?.completeTxHash ?? null,
       expiresAt,
-      result,
-      keyState: keyRow?.state ?? null,
-      keyDestroyed: keyRow?.state === "DESTROYED",
+      encryptedResult,
       arkivEntityExists: arkivExists,
-      ciphertextPreview,
       destruction,
     });
   } catch (err) {

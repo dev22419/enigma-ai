@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobOnChain } from "@/lib/contract";
-import { destroyExpiredKeys, verifyDestructionReceipt } from "@/lib/keystore";
+import { verifyDestructionReceipt } from "@/lib/keystore";
 import { readStore } from "@/lib/store";
 import { safeErrorMessage } from "@/lib/redact";
 import type { JobReceipt } from "@/lib/types";
 
-// The receipt holds hashes, ids and timestamps only. It outlives the data.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,7 +14,6 @@ export async function GET(
     const jobId = parseInt(id, 10);
     if (isNaN(jobId) || jobId < 1) return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
 
-    await destroyExpiredKeys();
     const job = await getJobOnChain(jobId);
     if (job.status === "None") return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
@@ -33,7 +31,6 @@ export async function GET(
       fileHash: job.fileHash,
       arkivEntityKey: row?.arkivEntityKey ?? null,
       expiresAt: row?.expiresAt ?? null,
-      keyDestroyed: !!destruction,
       destruction,
       destructionReceiptValid: destruction ? verifyDestructionReceipt(destruction) : null,
     };
