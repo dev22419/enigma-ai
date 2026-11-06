@@ -58,38 +58,22 @@ const CALLS: Call[] = [
     ],
   },
 ];
-const COLOR = { k: "text-frost", s: "text-melon-lit", n: "text-volt-lit", p: "text-frost-soft", c: "text-volt-lit" };
+const COLOR = { k: "text-frost", s: "text-frost/70", n: "text-volt-lit", p: "text-frost-soft", c: "text-volt-lit" };
 
-const NOTES = [
-  ["The key never leaves the browser", "The server only ever stores ciphertext. Reading an answer later needs both the job's access token and the key in your browser."],
-  ["Errors never carry secrets", "Every error is scrubbed before it leaves the server: API keys, private keys, bearer tokens, long hex and document text are replaced with [redacted]."],
-  ["Documents can't give orders", "Text inside a file is treated as content, never as instructions. A document that tells the model to ignore its rules gets summarised like any other."],
-];
 
 export function ApiSection() {
   const [tab, setTab] = useState(CALLS[0].key);
   const call = CALLS.find((c) => c.key === tab) ?? CALLS[0];
 
   return (
-    <section id="api" className="relative text-frost">
-      <div className="mx-auto grid max-w-[1280px] grid-cols-1 gap-14 px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
+    <section id="api" className="section text-frost">
+      <div className="shell grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
         <div>
-          <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">Three calls, no keys on the server</h2>
-          <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/75">
-            Open the job with ciphertext, have the enclave read the document, then store the answer your browser
-            encrypted. The server is a proxy: it never holds a key or an answer it could read.
-          </p>
-          <dl className="mt-10 space-y-6">
-            {NOTES.map(([k, v]) => (
-              <div key={k} className="border-l-2 border-volt pl-4">
-                <dt className="text-[16px] font-semibold">{k}</dt>
-                <dd className="mt-1 text-[14.5px] leading-relaxed text-frost-soft">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          <h2 className="heading">Three calls, no keys on the server</h2>
+          <p className="mt-4 max-w-[27rem] text-[17px] leading-relaxed text-frost-soft">The server is a proxy. It never holds a key or an answer it could read.</p>
         </div>
 
-        <div className="self-start overflow-hidden rounded-[12px] border border-night-line bg-night-2 shadow-[0_30px_90px_-40px_rgb(2_151_222/0.6)]">
+        <div className="self-start overflow-hidden rounded-[8px] border border-frost/12 bg-night-2">
           <div className="flex items-center border-b border-night-line px-2" role="tablist" aria-label="API calls">
             {CALLS.map((c) => (
               <button
@@ -100,7 +84,7 @@ export function ApiSection() {
                 className={cn("relative px-3 py-3 font-mono text-[12px] transition-colors", tab === c.key ? "text-frost" : "text-frost-soft hover:text-frost")}
               >
                 {c.label}
-                {tab === c.key && <span className="absolute inset-x-3 bottom-0 h-[2px] bg-melon" />}
+                {tab === c.key && <span className="absolute inset-x-3 bottom-0 h-px bg-frost" />}
               </button>
             ))}
             <span className="ml-auto truncate pr-3 font-mono text-[11px] text-frost-soft max-sm:hidden">{call.route}</span>

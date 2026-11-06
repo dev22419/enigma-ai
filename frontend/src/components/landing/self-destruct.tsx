@@ -69,14 +69,12 @@ export function SelfDestruct() {
   }
 
   return (
-    <section id="lifespan" className="relative overflow-hidden text-frost">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] bg-[radial-gradient(ellipse_50%_60%_at_70%_100%,rgb(2_151_222/0.22),transparent_70%)]" aria-hidden="true" />
-      <div className="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-14 px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
+    <section id="lifespan" className="section text-frost">
+      <div className="shell grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
         <div>
-          <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">You choose when the answer dies</h2>
-          <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/75">
-            Set a lifespan from one minute to 30 days. When it ends, Arkiv drops the encrypted answer and
-            your browser wipes the only key that opens it. Any copy left anywhere stays locked for good.
+          <h2 className="heading">You choose when the answer dies</h2>
+          <p className="mt-4 max-w-[27rem] text-[17px] leading-relaxed text-frost-soft">
+            One minute to 30 days. When it ends, Arkiv drops the answer and your browser wipes the key.
           </p>
 
           <div className="mt-10" role="radiogroup" aria-label="Lifespan">
@@ -105,7 +103,7 @@ export function SelfDestruct() {
           </div>
         </div>
 
-        <div className="relative rounded-[12px] border border-night-line bg-night-2/90 p-6 shadow-[0_30px_90px_-40px_rgb(2_151_222/0.5)] sm:p-8">
+        <div className="relative rounded-[8px] border border-frost/12 bg-night-2 p-6 sm:p-8">
           <div className="flex items-baseline justify-between gap-4 font-mono text-[11px] text-frost-soft">
             <span>supply-agreement.pdf, legal review</span>
             <span>Sample</span>
@@ -116,7 +114,7 @@ export function SelfDestruct() {
               <p className="font-mono text-[11px] text-frost-soft">{gone ? "key destroyed" : "key destroyed in"}</p>
               <p
                 className={cn(
-                  "display num mt-1 text-[clamp(2.8rem,7vw,5.6rem)] leading-[0.85] tracking-[-0.03em] transition-colors",
+                  "num mt-1 font-mono text-[clamp(2.6rem,6vw,4.5rem)] leading-none tracking-[-0.03em] transition-colors",
                   gone ? "text-frost/25" : late ? "text-melon" : "text-frost",
                 )}
               >
@@ -128,14 +126,14 @@ export function SelfDestruct() {
             </Button>
           </div>
 
-          <div className="relative mt-5 h-2 rounded-full bg-frost/10">
+          <div className="relative mt-5 h-1 rounded-full bg-frost/10">
             <div
               className={cn("absolute inset-y-0 left-0 w-full origin-left rounded-full transition-colors", late ? "bg-melon" : "bg-volt")}
               style={{ transform: `scaleX(${frac})` }}
             />
             {running && (
               <span
-                className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-frost shadow-[0_0_0_4px_rgb(92_196_255/0.3),0_0_18px_rgb(92_196_255/0.9)]"
+                className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-frost"
                 style={{ left: `${frac * 100}%` }}
               />
             )}
