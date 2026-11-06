@@ -9,7 +9,8 @@ export function Hero() {
   return (
     <section id="hero" className="relative isolate overflow-hidden text-frost">
       <div className="aurora -z-10" aria-hidden="true" />
-      <FlutedGlass className="-z-10" />
+      <FlutedGlass className="-z-10" rib={58} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-56 bg-[linear-gradient(180deg,rgb(2_7_10/0),var(--night))]" aria-hidden="true" />
       {/* Keeps the headline crisp over the brightest light */}
       <div
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_46%_at_50%_30%,rgb(2_7_10/0.82),rgb(2_7_10/0.35)_60%,rgb(2_7_10/0)_85%)]"

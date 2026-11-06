@@ -74,32 +74,68 @@ void main() {
   float aspect = uRes.x / uRes.y;
   float t = uTime;
 
-  // Which rib, and where across it (0..1)
+  // ---- Slab geometry -------------------------------------------------------
+  // Vertical slabs of thick glass with a hairline gap between them.
   float rib = frag.x / uRib;
   float id = floor(rib);
   float f = fract(rib);
-  float lens = f - 0.5;
+  float gap = 2.2 / uRib;                       // ~2px of dark seam
+  float body = smoothstep(0.0, gap, f) * smoothstep(1.0, 1.0 - gap, f);
+  float u = (f - 0.5) * 2.0;                     // -1 .. 1 across the slab
 
-  // Refraction: each rib shows a squeezed, mirrored slice of what is behind it, bent vertically
-  float jitter = hash(vec2(id, 1.0)) - 0.5;
-  float sx = (id + 0.5 - lens * 2.4) * uRib / uRes.x;
-  float sy = uv.y + lens * lens * 0.55 * sin(t * 0.35 + id * 0.21) + lens * 0.06 * jitter;
-  vec3 c = scene(vec2(sx * aspect, sy), t, aspect);
+  // Flat face with rounded, bevelled edges: the normal only tilts near the sides.
+  float tilt = sign(u) * pow(abs(u), 4.0);
+  vec3 n = normalize(vec3(tilt * 1.6, 0.0, 1.0));
 
-  // Rib shading: soft dark seams, a lit side and a sharp glint
-  float seam = smoothstep(0.0, 0.14, f) * smoothstep(1.0, 0.82, f);
-  float lit = 0.35 + 0.85 * smoothstep(0.95, 0.12, f);
-  float glint = pow(max(0.0, 1.0 - abs(f - 0.2) * 9.0), 4.0);
+  // Each slab sits at its own depth, so it shifts a little differently as you move.
+  float depth = hash(vec2(id, 7.0));
+  float parallax = (uMouse.x - 0.5) * (0.010 + 0.030 * depth) + (depth - 0.5) * 0.012;
+  float sway = 0.02 * sin(t * 0.3 + id * 0.37) * (0.4 + depth);
+
+  // ---- Refraction with dispersion -----------------------------------------
+  // Light bends at the bevels; red, green and blue bend by slightly different amounts.
+  float k = 0.11;
+  float bx = uv.x + parallax;
+  float by = uv.y + sway * u * u;
+  vec2 pr = vec2((bx - n.x * k * 0.92) * aspect, by);
+  vec2 pg = vec2((bx - n.x * k * 1.00) * aspect, by);
+  vec2 pb = vec2((bx - n.x * k * 1.10) * aspect, by);
+  vec3 c = vec3(scene(pr, t, aspect).r, scene(pg, t, aspect).g, scene(pb, t, aspect).b);
+
+  // The glass itself absorbs a little: thicker (darker, cooler) at the bevels.
+  float thickness = 1.0 - 0.35 * abs(tilt);
+  c *= mix(vec3(0.70, 0.78, 0.86), vec3(1.0), thickness);
+
+  // ---- Light on the glass ---------------------------------------------------
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
-  c = c * lit * (0.15 + 0.85 * seam) + glint * (0.9 * c + 0.35 * lum);
+  // Fresnel: edges reflect more, picking up the light around them
+  float fres = pow(abs(tilt), 1.4);
+  c += fres * (0.55 * c + 0.10 * vec3(0.85, 0.92, 1.0));
 
-  // Tone map so the colours run hot without clipping flat
-  c = 1.0 - exp(-c * 1.05);
-  // Push saturation back up after tone mapping
+  // A soft glare that follows the pointer across the slabs
+  vec3 L = normalize(vec3((uMouse.x - uv.x) * 1.8, 0.0, 0.55));
+  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+  float spec = pow(max(dot(n, H), 0.0), 140.0);
+  float glare = exp(-pow((uv.y - (0.35 + 0.25 * uMouse.y)) * 2.2, 2.0)); // strongest at the pointer's height
+  c += spec * (0.35 + 1.4 * lum) * (0.35 + 0.65 * glare) * vec3(1.0, 0.98, 0.96);
+
+  // Bright hairlines where each bevel meets the face, darker one on the far side
+  float bevelLit = exp(-pow((f - gap - 0.035) / 0.012, 2.0));
+  float bevelDark = exp(-pow((f - (1.0 - gap - 0.03)) / 0.02, 2.0));
+  c += bevelLit * (0.08 + 0.9 * lum) * 0.55;
+  c *= 1.0 - 0.45 * bevelDark;
+
+  // Seams between slabs: near black, with a faint cold edge
+  c = mix(NIGHT * 0.4 + vec3(0.01, 0.025, 0.04) * lum, c, body);
+
+  // A little depth top and bottom
+  c *= 0.82 + 0.18 * smoothstep(0.0, 0.25, uv.y) * smoothstep(1.0, 0.8, uv.y);
+
+  // Tone map so the colours run hot without clipping flat, then restore saturation
+  c = 1.0 - exp(-c * 1.1);
   float g = dot(c, vec3(0.299, 0.587, 0.114));
-  c = clamp(mix(vec3(g), c, 1.25), 0.0, 1.0);
-  // Fine grain
-  c += (hash(frag + fract(t)) - 0.5) * 0.035;
+  c = clamp(mix(vec3(g), c, 1.3), 0.0, 1.0);
+  c += (hash(frag + fract(t)) - 0.5) * 0.03;
   gl_FragColor = vec4(c, 1.0);
 }
 `;
