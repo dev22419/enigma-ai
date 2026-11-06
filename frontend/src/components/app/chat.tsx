@@ -1,8 +1,10 @@
 // AI-assisted: Used Claude to design and write this file.
 "use client";
 
+import { BorderBeam } from "border-beam";
 import { ArrowUp, ChevronDown, FileText, ImageIcon, Paperclip, X } from "lucide-react";
 import Link from "next/link";
+import { useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
 
@@ -305,6 +307,7 @@ function Composer({
 }) {
   const [err, setErr] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const reduce = useReducedMotion();
   const file = useRef<HTMLInputElement>(null);
   const { text, att, task, ttl } = draft;
 
@@ -379,107 +382,109 @@ function Composer({
 
   return (
     <div>
-      <div
-        className={cn(
-          "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
-          dragging && "shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1.5px_rgb(255_255_255/0.5)]",
-        )}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          attach(e.dataTransfer.files?.[0]);
-        }}
-      >
-        {att && (
-          <div className="flex items-center gap-2.5 px-4 pt-3.5 text-[13px]">
-            {att.src ? <Thumb src={att.src} className="size-11" /> : <FileText className="size-4 text-volt-lit" />}
-            <span className="min-w-0 truncate text-frost/90">{att.name}</span>
-            <span className="shrink-0 text-frost-soft/70">{kb(att.bytes)}</span>
-            <button
-              onClick={() => {
-                setErr(null);
-                setDraft((d) => ({ ...d, att: null }));
-              }}
-              aria-label="Remove attachment"
-              className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-frost-soft hover:bg-frost/10 hover:text-frost"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-        <label htmlFor="msg" className="sr-only">
-          Message
-        </label>
-        <textarea
-          id="msg"
-          ref={areaRef}
-          rows={1}
-          value={text}
-          onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
-          onKeyDown={onKey}
-          onPaste={onPaste}
-          placeholder={att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste a document or attach one"}
-          className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
-        />
-        <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
-          <button
-            onClick={() => file.current?.click()}
-            className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
-            aria-label="Attach a text file or image"
-            title="Attach a text file or image"
-          >
-            <Paperclip className="size-4" />
-          </button>
-          <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))}>
-            {TASKS.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.name}
-              </option>
-            ))}
-          </QuietSelect>
-          <QuietSelect label="Destroy the answer after" value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}>
-            {LIFESPANS.map((o) => (
-              <option key={o.ttl} value={o.ttl}>
-                Destroy after {o.label}
-              </option>
-            ))}
-          </QuietSelect>
-          {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
-          {gate.kind === "connect" ? (
-            <ConnectPill className="ml-auto" />
-          ) : (
-            <button
-              onClick={submit}
-              disabled={!canSend}
-              aria-label="Send"
-              title={busy ? "Enigma is still working on your last message" : undefined}
-              className={cn(
-                "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
-                gate.kind === "ok" && gate.price ? "max-sm:ml-auto" : "ml-auto",
-              )}
-            >
-              <ArrowUp className="size-4" strokeWidth={2.4} />
-            </button>
+      <BorderBeam borderRadius={16} active={!reduce}>
+        <div
+          className={cn(
+            "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
+            dragging && "shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1.5px_rgb(255_255_255/0.5)]",
           )}
-        </div>
-        <input
-          ref={file}
-          type="file"
-          className="sr-only"
-          accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,text/*"
-          onChange={(e) => {
-            attach(e.target.files?.[0]);
-            e.target.value = "";
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
           }}
-        />
-      </div>
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            attach(e.dataTransfer.files?.[0]);
+          }}
+        >
+          {att && (
+            <div className="flex items-center gap-2.5 px-4 pt-3.5 text-[13px]">
+              {att.src ? <Thumb src={att.src} className="size-11" /> : <FileText className="size-4 text-volt-lit" />}
+              <span className="min-w-0 truncate text-frost/90">{att.name}</span>
+              <span className="shrink-0 text-frost-soft/70">{kb(att.bytes)}</span>
+              <button
+                onClick={() => {
+                  setErr(null);
+                  setDraft((d) => ({ ...d, att: null }));
+                }}
+                aria-label="Remove attachment"
+                className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-frost-soft hover:bg-frost/10 hover:text-frost"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+          <label htmlFor="msg" className="sr-only">
+            Message
+          </label>
+          <textarea
+            id="msg"
+            ref={areaRef}
+            rows={1}
+            value={text}
+            onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
+            onKeyDown={onKey}
+            onPaste={onPaste}
+            placeholder={att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste a document or attach one"}
+            className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
+          />
+          <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
+            <button
+              onClick={() => file.current?.click()}
+              className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost"
+              aria-label="Attach a text file or image"
+              title="Attach a text file or image"
+            >
+              <Paperclip className="size-4" />
+            </button>
+            <QuietSelect label="Task" value={task} onChange={(v) => setDraft((d) => ({ ...d, task: v as Task }))}>
+              {TASKS.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.name}
+                </option>
+              ))}
+            </QuietSelect>
+            <QuietSelect label="Destroy the answer after" value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}>
+              {LIFESPANS.map((o) => (
+                <option key={o.ttl} value={o.ttl}>
+                  Destroy after {o.label}
+                </option>
+              ))}
+            </QuietSelect>
+            {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
+            {gate.kind === "connect" ? (
+              <ConnectPill className="ml-auto" />
+            ) : (
+              <button
+                onClick={submit}
+                disabled={!canSend}
+                aria-label="Send"
+                title={busy ? "Enigma is still working on your last message" : undefined}
+                className={cn(
+                  "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
+                  gate.kind === "ok" && gate.price ? "max-sm:ml-auto" : "ml-auto",
+                )}
+              >
+                <ArrowUp className="size-4" strokeWidth={2.4} />
+              </button>
+            )}
+          </div>
+          <input
+            ref={file}
+            type="file"
+            className="sr-only"
+            accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,text/*"
+            onChange={(e) => {
+              attach(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </BorderBeam>
       {gate.kind === "ok" && gate.price && (
         <p className="num mt-2 px-1 text-[12px] text-frost-soft/60 sm:hidden">
           {gate.price} USDT{left !== null ? `, ${left} left` : ""}
