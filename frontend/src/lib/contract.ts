@@ -65,6 +65,43 @@ export async function getJobOnChain(jobId: number): Promise<OnChainJob> {
   };
 }
 
+function getSigner() {
+  const key = process.env.DEPLOYER_PRIVATE_KEY;
+  if (!key) throw new Error("DEPLOYER_PRIVATE_KEY not configured");
+  return new ethers.Wallet(key, getProvider());
+}
+
+export async function createJobOnChain(
+  fileHash: string,
+  expirySeconds: number
+): Promise<{ jobId: number; txHash: string }> {
+  const signer = getSigner();
+  const contract = getContract(signer);
+  const tx = await contract.createJob(fileHash, expirySeconds);
+  const receipt = await tx.wait();
+
+  const log = receipt.logs.find(
+    (l: ethers.Log) => contract.interface.parseLog(l)?.name === "JobCreated"
+  );
+  const parsed = log ? contract.interface.parseLog(log) : null;
+  const jobId = parsed ? Number(parsed.args[0]) : 0;
+
+  return { jobId, txHash: receipt.hash };
+}
+
+export async function completeJobOnChain(
+  jobId: number,
+  resultHash: string,
+  attestationHash: string,
+  signature: string
+): Promise<string> {
+  const signer = getSigner();
+  const contract = getContract(signer);
+  const tx = await contract.completeJob(jobId, resultHash, attestationHash, signature);
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
 export async function getQueryPrice(): Promise<string> {
   const contract = getContract();
   const price: bigint = await contract.queryPrice();
