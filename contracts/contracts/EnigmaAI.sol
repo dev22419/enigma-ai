@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// AI-assisted: Used Claude for the Processing, Failed, Expired and KeyDestroyed lifecycle additions
 pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -17,11 +18,20 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
+    /// @dev Job lifecycle. `createJob` locks the payment in the same transaction, so the product's
+    ///      CREATED and PAID steps are one on-chain step (`Pending`).
+    ///        Pending -> Processing -> Completed -> Expired -> KeyDestroyed     (happy path)
+    ///        Pending | Processing -> Failed -> Refunded                         (provider failed)
+    ///        Pending | Processing -> Refunded                                   (deadline passed)
     enum Status {
-        None,
-        Pending,
-        Completed,
-        Refunded
+        None, // 0: does not exist
+        Pending, // 1: created, payment locked
+        Processing, // 2: a signer acknowledged the job; inference is running
+        Completed, // 3: result attested, payment released to the provider
+        Failed, // 4: a signer reported the job failed; payment is refundable now
+        Refunded, // 5: payment returned to the user's balance
+        Expired, // 6: the result's lifetime ended
+        KeyDestroyed // 7: a signer attested the job's encryption key was destroyed
     }
 
     struct Job {
@@ -43,6 +53,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
 
     uint32 public constant MIN_EXPIRY = 1 minutes; // the 2-minute demo timer and the backend's 60s floor must fit
     uint32 public constant MAX_EXPIRY = 30 days;
+    uint256 public constant MAX_REASON_LENGTH = 128; // bytes; the reason is a public event, never put user data in it
 
     IERC20 public immutable usdt;
 
@@ -57,12 +68,15 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     mapping(address => uint256) public balances;
     mapping(uint256 => Job) private _jobs;
     mapping(address => bool) public isSigner;
+    /// @notice Hash of the backend's signed key-destruction receipt, kept off-chain. Zero until recorded.
+    mapping(uint256 => bytes32) public keyDestructionReceipt;
 
     event Deposited(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event JobCreated(
         uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment, uint32 expirySeconds
     );
+    event JobProcessing(uint256 indexed jobId);
     event JobCompleted(
         uint256 indexed jobId,
         address indexed user,
@@ -71,6 +85,9 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         address signer,
         uint64 expiresAt
     );
+    event JobFailed(uint256 indexed jobId, string reason);
+    event JobExpired(uint256 indexed jobId);
+    event JobKeyDestroyed(uint256 indexed jobId, bytes32 receiptHash);
     event JobRefunded(uint256 indexed jobId, address indexed user, uint256 amount);
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
@@ -83,12 +100,20 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error InsufficientBalance();
     error InvalidExpiry();
     error InvalidJobStatus();
+    error InvalidReceipt();
+    error JobNotExpired();
+    error ReasonTooLong();
     error NotJobOwner();
     error JobTimedOut();
     error JobNotTimedOut();
     error UnauthorizedSigner();
     error SignerAlreadyRegistered();
     error SignerNotRegistered();
+
+    modifier onlySigner() {
+        if (!isSigner[msg.sender]) revert UnauthorizedSigner();
+        _;
+    }
 
     constructor(IERC20 usdt_, address provider_, uint256 queryPrice_, uint64 jobTimeout_, address initialOwner)
         Ownable(initialOwner)
@@ -149,6 +174,16 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit JobCreated(jobId, msg.sender, fileHash, price, expirySeconds);
     }
 
+    /// @notice A registered signer acknowledges a job and marks it as being processed.
+    ///         Payment stays locked; the job can still be completed, failed or refunded.
+    function startProcessing(uint256 jobId) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Pending) revert InvalidJobStatus();
+        if (block.timestamp > job.deadline) revert JobTimedOut();
+        job.status = Status.Processing;
+        emit JobProcessing(jobId);
+    }
+
     /// @notice Release payment to the provider once a registered signer attests to the result.
     ///         Callable by anyone (typically the backend relayer) with the oracle signature.
     function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes calldata signature)
@@ -156,7 +191,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         nonReentrant
     {
         Job storage job = _jobs[jobId];
-        if (job.status != Status.Pending) revert InvalidJobStatus();
+        if (job.status != Status.Pending && job.status != Status.Processing) revert InvalidJobStatus();
         if (block.timestamp > job.deadline) revert JobTimedOut();
 
         bytes32 digest = _hashTypedDataV4(
@@ -177,16 +212,64 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         );
     }
 
-    /// @notice Return a pending job's locked payment to the user's balance after the timeout.
-    ///         Callable by anyone.
+    /// @notice A registered signer reports that a job could not be completed. The payment stays locked
+    ///         but becomes refundable immediately instead of waiting for the deadline.
+    /// @param reason short, non-sensitive cause (e.g. "provider timeout"). It is emitted publicly.
+    function failJob(uint256 jobId, string calldata reason) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Pending && job.status != Status.Processing) revert InvalidJobStatus();
+        if (bytes(reason).length > MAX_REASON_LENGTH) revert ReasonTooLong();
+        job.status = Status.Failed;
+        emit JobFailed(jobId, reason);
+    }
+
+    /// @notice Return a job's locked payment to the user's balance. Callable by anyone.
+    ///         - Failed: refundable at once.
+    ///         - Pending or Processing: refundable only after the deadline. Processing must be refundable
+    ///           too, otherwise a signer that acknowledges a job and then disappears would lock the payment forever.
     function refundJob(uint256 jobId) external {
         Job storage job = _jobs[jobId];
-        if (job.status != Status.Pending) revert InvalidJobStatus();
-        if (block.timestamp <= job.deadline) revert JobNotTimedOut();
+        if (job.status == Status.Pending || job.status == Status.Processing) {
+            if (block.timestamp <= job.deadline) revert JobNotTimedOut();
+        } else if (job.status != Status.Failed) {
+            revert InvalidJobStatus();
+        }
 
         job.status = Status.Refunded;
         balances[job.user] += job.payment;
         emit JobRefunded(jobId, job.user, job.payment);
+    }
+
+    /// @notice Move a completed job to Expired once its result lifetime has ended.
+    ///         Callable by anyone: the clock is the only input, so it needs no trust.
+    function markExpired(uint256 jobId) external {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Completed) revert InvalidJobStatus();
+        if (!_resultExpired(job)) revert JobNotExpired();
+        job.status = Status.Expired;
+        emit JobExpired(jobId);
+    }
+
+    /// @notice A registered signer attests that the job's encryption key was destroyed.
+    ///         The contract cannot observe this itself; it trusts the signer, as it does for the result.
+    ///         A job whose lifetime has ended is moved through Expired automatically.
+    /// @param receiptHash hash of the signed destruction receipt; the receipt itself stays off-chain
+    function markKeyDestroyed(uint256 jobId, bytes32 receiptHash) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (receiptHash == bytes32(0)) revert InvalidReceipt();
+        if (job.status == Status.Completed) {
+            if (!_resultExpired(job)) revert JobNotExpired();
+            emit JobExpired(jobId);
+        } else if (job.status != Status.Expired) {
+            revert InvalidJobStatus();
+        }
+        job.status = Status.KeyDestroyed;
+        keyDestructionReceipt[jobId] = receiptHash;
+        emit JobKeyDestroyed(jobId, receiptHash);
+    }
+
+    function _resultExpired(Job storage job) private view returns (bool) {
+        return block.timestamp >= uint256(job.completedAt) + job.expirySeconds;
     }
 
     function getJob(uint256 jobId) external view returns (Job memory) {

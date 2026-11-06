@@ -8,6 +8,8 @@ const FILE_HASH = ethers.keccak256(ethers.toUtf8Bytes("encrypted-file"));
 const RESULT_HASH = ethers.keccak256(ethers.toUtf8Bytes("result"));
 const ATTEST_HASH = ethers.keccak256(ethers.toUtf8Bytes("attestation"));
 const EXPIRY = 300;
+// Mirrors the Status enum in EnigmaAI.sol
+const Status = { None: 0n, Pending: 1n, Processing: 2n, Completed: 3n, Failed: 4n, Refunded: 5n, Expired: 6n, KeyDestroyed: 7n };
 
 const TYPES = {
   Complete: [
@@ -117,7 +119,7 @@ describe("EnigmaAI", () => {
       expect(await enigma.balances(company.address)).to.equal(500_000n);
       const job = await enigma.getJob(1n);
       expect(job.user).to.equal(company.address);
-      expect(job.status).to.equal(1n); // Pending
+      expect(job.status).to.equal(Status.Pending);
       expect(job.payment).to.equal(PRICE);
       expect(job.fileHash).to.equal(FILE_HASH);
       expect(await enigma.nextJobId()).to.equal(2n);
@@ -152,7 +154,7 @@ describe("EnigmaAI", () => {
         .withArgs(1n, company.address, RESULT_HASH, ATTEST_HASH, oracle.address, blockTime + BigInt(EXPIRY));
       expect(await usdt.balanceOf(provider.address)).to.equal(PRICE);
       const job = await enigma.getJob(1n);
-      expect(job.status).to.equal(2n); // Completed
+      expect(job.status).to.equal(Status.Completed);
       expect(job.resultHash).to.equal(RESULT_HASH);
       expect(job.attestationHash).to.equal(ATTEST_HASH);
       expect(job.completedAt).to.equal(blockTime);
@@ -240,7 +242,7 @@ describe("EnigmaAI", () => {
       await time.increase(TIMEOUT + 1n);
       await expect(enigma.connect(other).refundJob(1n)).to.emit(enigma, "JobRefunded").withArgs(1n, company.address, PRICE);
       expect(await enigma.balances(company.address)).to.equal(2_000_000n);
-      expect((await enigma.getJob(1n)).status).to.equal(3n); // Refunded
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Refunded);
       await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
     });
 
