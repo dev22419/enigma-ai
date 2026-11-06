@@ -216,12 +216,17 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         emit JobFailed(jobId, reason);
     }
 
-    /// @notice Return a pending job's locked payment to the user's balance after the timeout.
-    ///         Callable by anyone.
+    /// @notice Return a job's locked payment to the user's balance. Callable by anyone.
+    ///         - Failed: refundable at once.
+    ///         - Pending or Processing: refundable only after the deadline. Processing must be refundable
+    ///           too, otherwise a signer that acknowledges a job and then disappears would lock the payment forever.
     function refundJob(uint256 jobId) external {
         Job storage job = _jobs[jobId];
-        if (job.status != Status.Pending) revert InvalidJobStatus();
-        if (block.timestamp <= job.deadline) revert JobNotTimedOut();
+        if (job.status == Status.Pending || job.status == Status.Processing) {
+            if (block.timestamp <= job.deadline) revert JobNotTimedOut();
+        } else if (job.status != Status.Failed) {
+            revert InvalidJobStatus();
+        }
 
         job.status = Status.Refunded;
         balances[job.user] += job.payment;
