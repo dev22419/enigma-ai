@@ -37,13 +37,20 @@ Browser                          Backend (proxy)                  External
 | **Result was deleted on schedule** | Arkiv enforces entity expiry at the protocol level. The browser wipes the key at the same time. |
 | **Payment was fair** | Whitechain escrow locks payment on `createJob` and releases on `completeJob`. Failed jobs are refunded after timeout. |
 
+## Private trust mode
+
+All inference requests include `X-0G-Provider-Trust-Mode: private`, which restricts routing to **TeeML providers only** (Intel TDX enclaves). If no TeeML provider is available, the request fails with a `503` rather than silently falling back to a non-TEE provider. This guarantees the plaintext enters a sealed enclave once it leaves the backend.
+
+See [docs/privacy-roadmap.md](privacy-roadmap.md) for the production path that eliminates the backend from the plaintext path entirely (direct browser→TEE via 0G's Direct mode SDK).
+
 ## What we trust
 
 | Component | Trust assumption | What breaks if it's compromised |
 |---|---|---|
 | **Browser** | The user's browser is not compromised | An attacker with browser access can read the key from `sessionStorage` |
 | **0G TEE** | Intel TDX enclave is secure; 0G's TEE implementation is correct | An attacker who breaks the TEE can read plaintext during inference |
-| **Backend (transit)** | The backend does not log or persist the plaintext it forwards to 0G | A malicious backend operator could capture plaintext in transit to the TEE |
+| **Backend (transit)** | The backend does not log or persist the plaintext it forwards to 0G. The code is auditable: `infer/route.ts` hashes, forwards, and discards — no disk write, no log, no store. | A malicious backend operator could modify the code to capture plaintext in transit. Production path (Path B) eliminates this by connecting the browser directly to the TEE. |
+| **0G Router** | The 0G Router processes plaintext in memory with a zero-retention policy | A compromised router could capture plaintext. Production path (Path B) bypasses the router via Direct mode. |
 | **TLS** | HTTPS between browser ↔ backend ↔ 0G is not intercepted | MITM can read plaintext in transit |
 | **Arkiv** | Arkiv actually drops entities after expiry | Stale ciphertext persists (but is unreadable without the key) |
 | **Whitechain** | The chain is live and the contract is correct | Payments could be stuck or receipts could be forged |
@@ -54,7 +61,7 @@ Browser                          Backend (proxy)                  External
 - Decrypted results (the backend returns raw ciphertext from Arkiv; the browser decrypts)
 - Decrypted files (the browser encrypts before upload; the backend stores the ciphertext blob)
 
-The backend holds plaintext **only during the TEE proxy call** (`POST /api/infer`), in memory, for the duration of the 0G API request. It is never written to disk, logged, or stored in the job record. The `redact.ts` module scrubs any plaintext that might leak via error messages.
+The backend holds plaintext **only during the TEE proxy call** (`POST /api/infer`), in memory, for the duration of the 0G API request. It is never written to disk, logged, or stored in the job record. The `redact.ts` module scrubs any plaintext that might leak via error messages. All inference requests use `X-0G-Provider-Trust-Mode: private` to ensure only TeeML providers (sealed Intel TDX enclaves) handle the request.
 
 ## Key lifecycle
 
@@ -76,7 +83,7 @@ The backend holds plaintext **only during the TEE proxy call** (`POST /api/infer
 
 ## Known limitations
 
-1. **Plaintext transits the backend.** During `POST /api/infer`, the plaintext document passes through backend memory on its way to the 0G TEE. A compromised backend could capture it. This is the main trust gap.
+1. **Plaintext transits the backend.** During `POST /api/infer`, the plaintext document passes through backend memory on its way to the 0G TEE. The backend hashes it (for fileHash verification), wraps it in a task-specific system prompt, forwards it to 0G with `X-0G-Provider-Trust-Mode: private` (TeeML-only), and discards it. A compromised backend could capture it — this is the main trust gap, and [the privacy roadmap](privacy-roadmap.md) describes the production path (Path B: direct browser→TEE) that eliminates it.
 2. **sessionStorage is per-tab.** If the user closes the tab, the key is lost immediately — they cannot decrypt the result even before the TTL expires. This is by design (fail-closed), but it means the user must keep the tab open.
 3. **No forward secrecy.** If an attacker captures the ciphertext from 0G Storage or Arkiv and later obtains the key (before destruction), they can decrypt. The security relies on the key being destroyed on schedule.
 4. **Single-browser key custody.** The key exists in exactly one browser tab. There is no key backup, no recovery, and no multi-device access. Losing the tab means losing access.
