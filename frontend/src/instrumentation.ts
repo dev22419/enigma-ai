@@ -5,8 +5,10 @@ export async function register() {
   g.__enigmaWorker = true;
   const { refundFailedJobs } = await import("./lib/refunds");
   const { scrubExpiredJobs } = await import("./lib/scrub");
+  const { settleDeliveredJobs } = await import("./lib/settle");
   setInterval(() => {
     refundFailedJobs().catch(() => undefined);
+    settleDeliveredJobs().catch(() => undefined);
     scrubExpiredJobs().catch(() => undefined);
   }, 30000);
 }

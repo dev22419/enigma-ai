@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { destroyExpiredKeys } from "@/lib/keystore";
 import { refundFailedJobs } from "@/lib/refunds";
 import { scrubExpiredJobs } from "@/lib/scrub";
+import { settleDeliveredJobs } from "@/lib/settle";
 import { tokensEqual } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
   }
   const destroyed = await destroyExpiredKeys();
   const refunded = await refundFailedJobs();
+  const settled = await settleDeliveredJobs();
   const scrubbed = await scrubExpiredJobs();
-  return NextResponse.json({ destroyed, refunded, scrubbed });
+  return NextResponse.json({ destroyed, refunded, settled, scrubbed });
 }

@@ -14,8 +14,10 @@ export async function refundFailedJobs(now = Math.floor(Date.now() / 1000)): Pro
   const refunded: string[] = [];
   try {
     const { jobs } = await readStore();
-    // A job whose browser went away mid-run stays "processing". Past its on-chain deadline it is refundable too.
-    const pending = Object.values(jobs).filter((j) => (j.status === "failed" || j.status === "processing") && !j.refund);
+    // A job whose browser went away mid-run stays "processing", and past its deadline it is refundable too.
+    // But not once its answer was delivered (j.inferred): the user already has it, so it is settled, not refunded.
+    // A job the server failed (status "failed") is refundable either way.
+    const pending = Object.values(jobs).filter((j) => (j.status === "failed" || (j.status === "processing" && !j.inferred)) && !j.refund);
     for (const j of pending) {
       try {
         const chain = await getJobOnChain(Number(j.jobId));

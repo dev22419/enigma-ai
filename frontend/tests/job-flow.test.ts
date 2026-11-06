@@ -83,6 +83,7 @@ import { POST as postCron } from "@/app/api/cron/expire/route";
 import { buildAuthMessage } from "@/lib/auth-message";
 import { failJobOnChain, markKeyDestroyedOnChain } from "@/lib/contract";
 import { scrubExpiredJobs } from "@/lib/scrub";
+import { SETTLE_AFTER_SECONDS, settleDeliveredJobs } from "@/lib/settle";
 import { withStore } from "@/lib/store";
 import { readStore } from "@/lib/store";
 import { refundFailedJobs } from "@/lib/refunds";
@@ -745,6 +746,38 @@ describe("cron and expiry scrub", () => {
     m.chain = { status: "Pending", deadline: now() - 5 };
     expect(await refundFailedJobs()).toEqual(["1"]);
     expect((await readStore()).jobs["1"].refund).toMatchObject({ state: "REFUNDED" });
+  });
+
+  it("never refunds a job whose answer was already delivered", async () => {
+    await postJob(jobReq);
+    expect((await inferReq(inferBody)).status).toBe(200); // the user has the answer now, and never stores it
+    m.chain = { status: "Pending", deadline: now() - 5 };
+    expect(await refundFailedJobs()).toEqual([]);
+    expect(m.refundJobOnChain).not.toHaveBeenCalled();
+  });
+
+  it("completes a delivered but unstored job itself, only after the wait and before the deadline", async () => {
+    await postJob(jobReq);
+    await inferReq(inferBody);
+    m.chain = { status: "Pending", deadline: now() + 3000 };
+    expect(await settleDeliveredJobs()).toEqual([]); // too soon
+    expect(m.completeJobOnChain).not.toHaveBeenCalled();
+
+    const later = now() + SETTLE_AFTER_SECONDS + 5;
+    expect(await settleDeliveredJobs(later)).toEqual(["1"]);
+    expect(m.completeJobOnChain).toHaveBeenCalledWith(1, RESULT_HASH, ATT_HASH, expect.stringMatching(/^0x/));
+    const row = (await readStore()).jobs["1"];
+    expect(row.status).toBe("completed");
+    expect(row.completeTxHash).toBe("0xcompletetx");
+    expect(await settleDeliveredJobs(later)).toEqual([]); // once
+  });
+
+  it("leaves a delivered job alone once the contract won't accept a completion", async () => {
+    await postJob(jobReq);
+    await inferReq(inferBody);
+    m.chain = { status: "Pending", deadline: now() - 5 };
+    expect(await settleDeliveredJobs(now() + SETTLE_AFTER_SECONDS + 5)).toEqual([]);
+    expect(m.completeJobOnChain).not.toHaveBeenCalled();
   });
 
   it("doesn't touch an abandoned job before its deadline", async () => {
