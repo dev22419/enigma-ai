@@ -252,6 +252,10 @@ const fresh = {
   },
 };
 
+export function getFresh(id: string): string | undefined {
+  return fresh.get(id);
+}
+
 function post<T>(url: string, body: unknown, token?: string) {
   return call<T>(url, {
     method: "POST",
