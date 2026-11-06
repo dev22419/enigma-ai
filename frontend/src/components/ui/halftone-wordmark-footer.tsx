@@ -150,7 +150,7 @@ const HWF_CSS = `
 .hwf-root canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; max-width: none; }
 .hwf-top {
   position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 1fr));
-  gap: 24px; padding: clamp(22px, 3.4vw, 40px) clamp(20px, 3.4vw, 44px) 0;
+  gap: 24px; padding: clamp(22px, 3.4vw, 40px) max(clamp(20px, 4vw, 32px), calc(50% - 568px)) 0;
   font-family: var(--hwf-mono); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; line-height: 1.75;
 }
 .hwf-brand strong { display: block; font-weight: 500; }
@@ -167,7 +167,7 @@ const HWF_CSS = `
 .hwf-col a:focus-visible, .hwf-up:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
 .hwf-rule {
   position: relative; z-index: 1; display: flex; justify-content: flex-end; align-items: center; gap: 16px;
-  margin: clamp(18px, 2.6vw, 30px) clamp(20px, 3.4vw, 44px) 0; padding-top: 12px;
+  margin: clamp(18px, 2.6vw, 30px) max(clamp(20px, 4vw, 32px), calc(50% - 568px)) 0; padding-top: 12px;
   border-top: 0.5px solid color-mix(in srgb, var(--hwf-ink) 16%, transparent);
   font-family: var(--hwf-mono); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
 }
