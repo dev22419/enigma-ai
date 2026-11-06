@@ -1,12 +1,12 @@
 // Kill-switch test: does a short-lived Arkiv entity really disappear?
-// Needs ORACLE_PRIVATE_KEY (in ../.env) funded on Arkiv Rabdi: https://hub.arkiv.network/faucet
+// Needs DEPLOYER_PRIVATE_KEY (in ../.env) funded on Arkiv Rabdi: https://hub.arkiv.network/faucet
 // Usage: npx tsx scripts/smoke-arkiv.mts [ttlSeconds]
 import { privateKeyToAccount } from "viem/accounts";
 import { privateKeyFromEnv } from "../src/lib/env";
 import { storeInArkiv, fetchFromArkiv } from "../src/lib/arkiv";
 process.loadEnvFile("../.env");
 
-console.log("writer address:", privateKeyToAccount(privateKeyFromEnv("ORACLE_PRIVATE_KEY")).address);
+console.log("writer address:", privateKeyToAccount(privateKeyFromEnv("DEPLOYER_PRIVATE_KEY")).address);
 const ttl = Number(process.argv[2] ?? 60);
 const id = `smoke-${Date.now()}`;
 const t0 = Math.floor(Date.now() / 1000);
