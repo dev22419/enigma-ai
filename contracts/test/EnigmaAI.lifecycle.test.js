@@ -109,4 +109,48 @@ describe("EnigmaAI lifecycle", () => {
       expect(await usdt.balanceOf(provider.address)).to.equal(PRICE);
     });
   });
+
+  describe("failJob", () => {
+    it("fails a Processing job and emits the reason", async () => {
+      const { enigma, oracle } = await loadFixture(processing);
+      await expect(enigma.connect(oracle).failJob(1n, "provider timeout")).to.emit(enigma, "JobFailed").withArgs(1n, "provider timeout");
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Failed);
+    });
+
+    it("also fails a Pending job (the backend can give up before acknowledging)", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await enigma.connect(oracle).failJob(1n, "misconfigured");
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Failed);
+    });
+
+    it("is restricted to registered signers", async () => {
+      const { enigma, company, other, owner } = await loadFixture(processing);
+      for (const who of [company, other, owner]) {
+        await expect(enigma.connect(who).failJob(1n, "x")).to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
+      }
+    });
+
+    it("cannot fail a completed, failed, refunded or unknown job", async () => {
+      const { enigma, oracle } = await loadFixture(completed);
+      await expect(enigma.connect(oracle).failJob(1n, "late")).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      await expect(enigma.connect(oracle).failJob(99n, "none")).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+
+      const ctx = await loadFixture(withJob);
+      await ctx.enigma.connect(ctx.oracle).failJob(1n, "once");
+      await expect(ctx.enigma.connect(ctx.oracle).failJob(1n, "twice")).to.be.revertedWithCustomError(ctx.enigma, "InvalidJobStatus");
+    });
+
+    it("caps the public reason at 128 bytes", async () => {
+      const { enigma, oracle } = await loadFixture(processing);
+      await expect(enigma.connect(oracle).failJob(1n, "x".repeat(129))).to.be.revertedWithCustomError(enigma, "ReasonTooLong");
+      await enigma.connect(oracle).failJob(1n, "x".repeat(128));
+    });
+
+    it("blocks completion afterwards, even with a valid signature", async () => {
+      const { enigma, company, oracle, domain } = await loadFixture(processing);
+      await enigma.connect(oracle).failJob(1n, "gave up");
+      const sig = await signComplete(oracle, domain, 1n, company.address);
+      await expect(enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+  });
 });
