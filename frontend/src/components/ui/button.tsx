@@ -12,7 +12,7 @@ const buttonVariants = cva(
       variant: {
         /* The one thing to do on a screen */
         primary:
-          "bg-melon text-night shadow-[inset_0_-2px_0_rgb(2_7_10/0.2)] hover:bg-melon-lit hover:shadow-[inset_0_-2px_0_rgb(2_7_10/0.2),0_0_0_4px_rgb(252_115_77/0.2),0_8px_30px_-6px_rgb(252_115_77/0.55)]",
+          "bg-melon text-night hover:bg-melon-lit",
         ink: "bg-ink text-sheet hover:bg-night-3",
         outline: "border-[1.5px] border-ink text-ink hover:bg-ink hover:text-sheet",
         "outline-frost": "border-[1.5px] border-frost/35 text-frost hover:border-frost hover:bg-frost/8",
