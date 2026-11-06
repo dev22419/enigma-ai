@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { privateKeyFromEnv } from "./env";
 import { WHITECHAIN_RPC } from "./constants";
 
 const ENIGMA_ABI = [
@@ -8,6 +9,7 @@ const ENIGMA_ABI = [
   "function nextJobId() external view returns (uint256)",
   "function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256)",
   "function completeJob(uint256 jobId, bytes32 resultHash, bytes32 attestationHash, bytes signature) external",
+  "function refundJob(uint256 jobId) external",
   "function deposit(uint256 amount) external",
   "event JobCreated(uint256 indexed jobId, address indexed user, bytes32 fileHash, uint256 payment, uint32 expirySeconds)",
   "event JobCompleted(uint256 indexed jobId, address indexed user, bytes32 resultHash, bytes32 attestationHash, address signer, uint64 expiresAt)",
@@ -66,9 +68,7 @@ export async function getJobOnChain(jobId: number): Promise<OnChainJob> {
 }
 
 function getSigner() {
-  const key = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!key) throw new Error("DEPLOYER_PRIVATE_KEY not configured");
-  return new ethers.Wallet(key, getProvider());
+  return new ethers.Wallet(privateKeyFromEnv("DEPLOYER_PRIVATE_KEY"), getProvider());
 }
 
 export async function createJobOnChain(
@@ -102,6 +102,14 @@ export async function completeJobOnChain(
   return receipt.hash;
 }
 
+export async function refundJobOnChain(jobId: number): Promise<string> {
+  const signer = getSigner();
+  const contract = getContract(signer);
+  const tx = await contract.refundJob(jobId);
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
 export async function getQueryPrice(): Promise<string> {
   const contract = getContract();
   const price: bigint = await contract.queryPrice();
@@ -114,21 +122,24 @@ export async function getNextJobId(): Promise<number> {
   return Number(id);
 }
 
+// Reads the job table directly instead of scanning events: public RPCs reject eth_getLogs over a
+// wide block range ("Block range is too large"), and the scan from block 0 always hit that.
+// Scans the newest `scanLimit` jobs, in small concurrent batches, and returns the caller's in id order.
 export async function getJobHistory(
-  userAddress: string
+  userAddress: string,
+  scanLimit = 200
 ): Promise<(OnChainJob & { jobId: number })[]> {
   const contract = getContract();
-  const filter = contract.filters.JobCreated(null, userAddress);
-  const events = await contract.queryFilter(filter);
-
-  const jobs = await Promise.all(
-    events.map(async (event) => {
-      const log = event as ethers.EventLog;
-      const jobId = Number(log.args[0]);
-      const job = await getJobOnChain(jobId);
-      return { ...job, jobId };
-    })
-  );
-
-  return jobs;
+  const next = Number(await contract.nextJobId());
+  const first = Math.max(1, next - scanLimit);
+  const mine: (OnChainJob & { jobId: number })[] = [];
+  const BATCH = 10;
+  for (let start = first; start < next; start += BATCH) {
+    const ids = Array.from({ length: Math.min(BATCH, next - start) }, (_, i) => start + i);
+    const jobs = await Promise.all(ids.map(async (jobId) => ({ ...(await getJobOnChain(jobId)), jobId })));
+    for (const job of jobs) {
+      if (job.user.toLowerCase() === userAddress.toLowerCase()) mine.push(job);
+    }
+  }
+  return mine;
 }

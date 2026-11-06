@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "^1.2.8",
     "@arkiv-network/sdk": "^1.0.1",
     "ethers": "^6.17.0",
     "next": "16.4.5",
@@ -24,6 +26,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }

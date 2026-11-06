@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobOnChain } from "@/lib/contract";
 import { fetchFromArkiv } from "@/lib/arkiv";
+import { decrypt, parseEnvelope } from "@/lib/crypto";
+import { destroyExpiredKeys, getActiveKey } from "@/lib/keystore";
+import { readStore } from "@/lib/store";
+import { safeErrorMessage } from "@/lib/redact";
 
 export async function GET(
   _req: NextRequest,
@@ -13,22 +17,38 @@ export async function GET(
       return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
     }
 
+    await destroyExpiredKeys();
+
     const job = await getJobOnChain(jobId);
     if (job.status === "None") {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
+    const store = await readStore();
+    const row = store.jobs[String(jobId)] ?? null;
+    const keyRow = store.keys[String(jobId)] ?? null;
+    const destruction = store.receipts[String(jobId)] ?? null;
+
     let result: string | null = null;
-    let expired = false;
+    let arkivExists = false;
+    let ciphertextPreview: string | null = null;
+    let expiresAt = row?.expiresAt ?? null;
 
     if (job.status === "Completed") {
-      const arkivData = await fetchFromArkiv(`job-${jobId}`).catch(() => null);
-      if (arkivData?.exists) {
-        result = arkivData.data;
-        const now = Math.floor(Date.now() / 1000);
-        expired = arkivData.expiresAt > 0 && arkivData.expiresAt < now;
-      } else {
-        expired = true;
+      const arkiv = await fetchFromArkiv(String(jobId)).catch(() => null);
+      arkivExists = !!arkiv?.exists;
+      if (arkiv?.exists && arkiv.envelopeJson) {
+        expiresAt = arkiv.expiresAtUnix;
+        const env = parseEnvelope(arkiv.envelopeJson);
+        ciphertextPreview = env.ciphertext.slice(0, 96);
+        const active = await getActiveKey(String(jobId));
+        if (active) {
+          try {
+            result = decrypt(active.key, env, { jobId: String(jobId), objectType: "result" }).toString("utf8");
+          } finally {
+            active.key.fill(0);
+          }
+        }
       }
     }
 
@@ -43,19 +63,21 @@ export async function GET(
       fileHash: job.fileHash,
       resultHash: job.resultHash,
       attestationHash: job.attestationHash,
-      result: expired ? null : result,
-      expired,
-      receipt: {
-        jobId,
-        txHash: null,
-        attestationHash: job.attestationHash,
-        resultHash: job.resultHash,
-        fileHash: job.fileHash,
-        expired,
-      },
+      requestId: row?.requestId ?? null,
+      arkivEntityKey: row?.arkivEntityKey ?? null,
+      inputStorage: row?.inputStorage ?? null,
+      createTxHash: row?.createTxHash ?? null,
+      completeTxHash: row?.completeTxHash ?? null,
+      expiresAt,
+      result,
+      keyState: keyRow?.state ?? null,
+      keyDestroyed: keyRow?.state === "DESTROYED",
+      arkivEntityExists: arkivExists,
+      ciphertextPreview,
+      destruction,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    const message = safeErrorMessage(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

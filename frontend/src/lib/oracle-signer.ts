@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { privateKeyFromEnv } from "./env";
 import { WHITECHAIN_CHAIN_ID } from "./constants";
 
 const EIP712_DOMAIN = {
@@ -25,8 +26,7 @@ export async function signJobCompletion(params: {
   resultHash: string;
   attestationHash: string;
 }): Promise<string> {
-  const oracleKey = process.env.ORACLE_PRIVATE_KEY;
-  if (!oracleKey) throw new Error("ORACLE_PRIVATE_KEY not configured");
+  const oracleKey = privateKeyFromEnv("ORACLE_PRIVATE_KEY");
 
   const contractAddress = process.env.CONTRACT_ADDRESS;
   if (!contractAddress) throw new Error("CONTRACT_ADDRESS not configured");
