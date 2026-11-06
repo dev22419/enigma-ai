@@ -83,6 +83,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         uint64 expiresAt
     );
     event JobFailed(uint256 indexed jobId, string reason);
+    event JobExpired(uint256 indexed jobId);
     event JobRefunded(uint256 indexed jobId, address indexed user, uint256 amount);
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
@@ -95,6 +96,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error InsufficientBalance();
     error InvalidExpiry();
     error InvalidJobStatus();
+    error JobNotExpired();
     error ReasonTooLong();
     error NotJobOwner();
     error JobTimedOut();
@@ -231,6 +233,20 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         job.status = Status.Refunded;
         balances[job.user] += job.payment;
         emit JobRefunded(jobId, job.user, job.payment);
+    }
+
+    /// @notice Move a completed job to Expired once its result lifetime has ended.
+    ///         Callable by anyone: the clock is the only input, so it needs no trust.
+    function markExpired(uint256 jobId) external {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Completed) revert InvalidJobStatus();
+        if (!_resultExpired(job)) revert JobNotExpired();
+        job.status = Status.Expired;
+        emit JobExpired(jobId);
+    }
+
+    function _resultExpired(Job storage job) private view returns (bool) {
+        return block.timestamp >= uint256(job.completedAt) + job.expirySeconds;
     }
 
     function getJob(uint256 jobId) external view returns (Job memory) {
