@@ -7,10 +7,17 @@ import { storeInArkiv } from "@/lib/arkiv";
 import { encrypt, serializeEnvelope } from "@/lib/crypto";
 import { createKey, setKeyExpiry, destroyKey } from "@/lib/keystore";
 import { withStore } from "@/lib/store";
+import { configProblems } from "@/lib/preflight";
+import { safeErrorMessage } from "@/lib/redact";
+import { storageConfigured, uploadCiphertext } from "@/lib/storage";
 import type { CreateJobRequest, CreateJobResponse } from "@/lib/types";
 
+// Roughly 8 MB of text or base64. A hard cap so one request cannot exhaust memory or the 0G budget.
+const MAX_FILE_CHARS = 8_000_000;
+
+// Every message that leaves this route is scrubbed: upstream errors can echo request bodies.
 function fail(status: number, error: string, extra: Record<string, unknown> = {}) {
-  return NextResponse.json({ error, ...extra }, { status });
+  return NextResponse.json({ error: safeErrorMessage(error), ...extra }, { status });
 }
 
 export async function POST(req: NextRequest) {
@@ -24,12 +31,19 @@ export async function POST(req: NextRequest) {
   if (!TASK_TYPES.includes(body.taskType)) {
     return fail(400, `Invalid taskType. Must be one of: ${TASK_TYPES.join(", ")}`);
   }
-  if (!body.fileContent || !body.fileName) {
+  if (typeof body.fileContent !== "string" || typeof body.fileName !== "string" || !body.fileContent || !body.fileName) {
     return fail(400, "fileContent and fileName are required");
+  }
+  if (body.fileContent.length > MAX_FILE_CHARS) {
+    return fail(413, `fileContent is too large (limit ${MAX_FILE_CHARS} characters)`);
   }
   if (!Number.isInteger(body.ttl) || body.ttl < MIN_TTL_SECONDS || body.ttl > MAX_TTL_SECONDS) {
     return fail(400, `ttl must be a whole number of seconds between ${MIN_TTL_SECONDS} and ${MAX_TTL_SECONDS}`);
   }
+
+  // Refuse before touching the chain, so a bad key cannot leave a locked payment behind.
+  const problems = configProblems();
+  if (problems.length) return fail(503, `Server is not configured: ${problems.join("; ")}`);
 
   const fileHash = hashContent(body.fileContent);
   const now = () => Math.floor(Date.now() / 1000);
@@ -40,7 +54,7 @@ export async function POST(req: NextRequest) {
   try {
     ({ jobId, txHash: createTxHash } = await createJobOnChain(fileHash, body.ttl));
   } catch (err) {
-    return fail(502, `Could not create the job on-chain: ${err instanceof Error ? err.message : err}`);
+    return fail(502, `Could not create the job on-chain: ${safeErrorMessage(err)}`);
   }
   const id = String(jobId);
 
@@ -58,7 +72,8 @@ export async function POST(req: NextRequest) {
   // Any failure from here: stop, destroy the key, leave the job uncompleted so
   // the on-chain timeout refund returns the payment. Never report a success we
   // did not achieve.
-  const abort = async (status: number, message: string) => {
+  const abort = async (status: number, rawMessage: string) => {
+    const message = safeErrorMessage(rawMessage);
     key.fill(0);
     await withStore((d) => {
       if (d.jobs[id]) { d.jobs[id].status = "failed"; d.jobs[id].error = message; }
@@ -71,6 +86,14 @@ export async function POST(req: NextRequest) {
     // 3. Encrypt the input. The ciphertext hash is recorded; the blob is destined for 0G Storage.
     const inputEnvelope = encrypt(key, keyId, body.fileContent, { jobId: id, objectType: "input" });
     const inputCiphertextHash = hashContent(serializeEnvelope(inputEnvelope));
+
+    // 3b. Store the encrypted input on 0G Storage (opt-in via ZG_STORAGE_INDEXER). Fails closed:
+    //     if storage is switched on and the upload fails, the job fails and is refunded.
+    let inputStorage: { rootHash: string; txHash: string } | null = null;
+    if (storageConfigured()) {
+      inputStorage = await uploadCiphertext(serializeEnvelope(inputEnvelope));
+      await withStore((d) => { if (d.jobs[id]) d.jobs[id].inputStorage = inputStorage; });
+    }
 
     // 4. Private inference on 0G with TEE verification.
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
@@ -114,6 +137,6 @@ export async function POST(req: NextRequest) {
     };
     return NextResponse.json(response);
   } catch (err) {
-    return abort(502, err instanceof Error ? err.message : "Internal server error");
+    return abort(502, safeErrorMessage(err));
   }
 }

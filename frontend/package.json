@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "^1.2.8",
     "@arkiv-network/sdk": "^1.0.1",
     "ethers": "^6.17.0",
     "next": "16.4.5",

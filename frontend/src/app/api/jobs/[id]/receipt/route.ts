@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getJobOnChain } from "@/lib/contract";
 import { destroyExpiredKeys, verifyDestructionReceipt } from "@/lib/keystore";
 import { readStore } from "@/lib/store";
+import { safeErrorMessage } from "@/lib/redact";
 import type { JobReceipt } from "@/lib/types";
 
 // The receipt holds hashes, ids and timestamps only. It outlives the data.
@@ -38,6 +39,6 @@ export async function GET(
     };
     return NextResponse.json(receipt);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: safeErrorMessage(err) }, { status: 500 });
   }
 }

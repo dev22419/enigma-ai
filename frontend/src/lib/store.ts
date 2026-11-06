@@ -29,6 +29,10 @@ export interface JobRow {
   error: string | null;
   createdAt: number;
   expiresAt: number | null;
+  // Encrypted input as stored on 0G Storage (ciphertext only). Absent when storage is not configured.
+  inputStorage?: { rootHash: string; txHash: string } | null;
+  // Set by the refund worker for jobs that failed after payment was locked.
+  refund?: { state: "REFUNDED" | "NOT_REQUIRED"; txHash: string | null; at: number } | null;
 }
 
 export interface DestructionReceipt {

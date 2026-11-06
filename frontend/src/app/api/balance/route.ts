@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBalance, getQueryPrice } from "@/lib/contract";
+import { safeErrorMessage } from "@/lib/redact";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
         : 0,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    const message = safeErrorMessage(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

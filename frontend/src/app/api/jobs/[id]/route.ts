@@ -4,6 +4,7 @@ import { fetchFromArkiv } from "@/lib/arkiv";
 import { decrypt, parseEnvelope } from "@/lib/crypto";
 import { destroyExpiredKeys, getActiveKey } from "@/lib/keystore";
 import { readStore } from "@/lib/store";
+import { safeErrorMessage } from "@/lib/redact";
 
 export async function GET(
   _req: NextRequest,
@@ -64,6 +65,7 @@ export async function GET(
       attestationHash: job.attestationHash,
       requestId: row?.requestId ?? null,
       arkivEntityKey: row?.arkivEntityKey ?? null,
+      inputStorage: row?.inputStorage ?? null,
       expiresAt,
       result,
       keyState: keyRow?.state ?? null,
@@ -73,7 +75,7 @@ export async function GET(
       destruction,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    const message = safeErrorMessage(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
