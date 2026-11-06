@@ -276,6 +276,32 @@ describe("failure path (#62)", () => {
   });
 });
 
+describe("model output guards", () => {
+  it("fails closed when the model returns no answer (all tokens spent reasoning)", async () => {
+    m.inference.mockResolvedValue({ chatId: "c", content: "   ", provider: "p", requestId: "r", finishReason: "length" });
+    const res = await post(req);
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toContain("empty result");
+    expect(m.completeJobOnChain).not.toHaveBeenCalled(); // the provider is not paid for nothing
+    expect(m.arkiv.size).toBe(0); // nothing stored
+    const s = await readStore();
+    expect(s.jobs["1"].status).toBe("failed");
+    expect(s.keys["1"].state).toBe("DESTROYED");
+  });
+
+  it("marks an answer that hit the length limit as truncated", async () => {
+    m.inference.mockResolvedValue({ chatId: "c", content: "Partial analysis", provider: "p", requestId: "r", finishReason: "length" });
+    const body = await (await post(req)).json();
+    expect(body.result).toContain("Partial analysis");
+    expect(body.result).toContain("[Output truncated");
+  });
+
+  it("leaves a complete answer untouched", async () => {
+    m.inference.mockResolvedValue({ chatId: "c", content: "Full analysis", provider: "p", requestId: "r", finishReason: "stop" });
+    expect((await (await post(req)).json()).result).toBe("Full analysis");
+  });
+});
+
 describe("0G Storage (#49)", () => {
   it("uploads only the encrypted input and records where it went", async () => {
     m.storageOn = true;
