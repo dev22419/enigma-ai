@@ -651,3 +651,81 @@ body {
     transition: none;
   }
 }
+
+/* ---- Cinematic hero: the wordmark far off at the vanishing point ---- */
+.enigma-title {
+  font-family: var(--font-title), "Trajan Pro", "Optima", serif;
+  font-weight: 600;
+  font-size: clamp(24px, 5.2svh, 66px);
+  line-height: 1;
+  letter-spacing: 0.13em;
+  padding-left: 0.13em; /* balances the trailing letter-space so it centres on the apex */
+  color: #fffaf0;
+  text-shadow:
+    0 0 4px rgb(255 248 230 / 1),
+    0 0 14px rgb(255 224 165 / 0.9),
+    0 0 40px rgb(255 178 90 / 0.62),
+    0 0 100px rgb(255 150 60 / 0.4);
+  animation:
+    title-in 3.4s cubic-bezier(0.16, 1, 0.3, 1) 0.9s both,
+    title-breathe 6s ease-in-out 4.3s infinite;
+}
+/* Only opacity, blur and scale animate, so the layout the shader measures never moves */
+@keyframes title-in {
+  from {
+    opacity: 0;
+    filter: blur(16px);
+    transform: scale(1.4);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+@keyframes title-breathe {
+  50% {
+    text-shadow:
+      0 0 5px rgb(255 250 235 / 1),
+      0 0 18px rgb(255 228 172 / 0.95),
+      0 0 52px rgb(255 182 96 / 0.7),
+      0 0 120px rgb(255 150 60 / 0.48);
+  }
+}
+.enigma-tick {
+  display: block;
+  width: 44px;
+  height: 1px;
+  background: linear-gradient(90deg, rgb(234 243 249 / 0.2), rgb(234 243 249 / 0.9));
+  transform-origin: left;
+  animation: tick 2.4s ease-in-out infinite;
+}
+@keyframes tick {
+  0%,
+  100% {
+    transform: scaleX(0.25);
+  }
+  50% {
+    transform: scaleX(1);
+  }
+}
+.enigma-rise {
+  animation: rise 1.6s cubic-bezier(0.16, 1, 0.3, 1) 3.1s both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .enigma-title,
+  .enigma-rise,
+  .enigma-tick {
+    animation: none;
+  }
+}
