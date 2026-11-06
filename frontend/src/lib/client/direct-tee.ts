@@ -8,15 +8,13 @@ import {
   createZGComputeNetworkBroker,
   type ZGComputeNetworkBroker,
 } from "@0gfoundation/0g-compute-ts-sdk";
-import { BrowserProvider, JsonRpcProvider } from "ethers";
+import { JsonRpcProvider, Wallet } from "ethers";
 import { SYSTEM_PROMPTS, type TaskType } from "../constants";
 
 const ZG_RPC = "https://evmrpc-testnet.0g.ai";
 const ZG_CHAIN_ID = 16602;
 
-// Minimum deposit to the 0G ledger (in 0G tokens).
 const MIN_LEDGER_DEPOSIT = 0.5;
-// Minimum transfer to a provider sub-account (in neuron = smallest 0G unit).
 const MIN_PROVIDER_TRANSFER = BigInt(500_000_000_000_000); // 0.0005 0G
 
 export interface DirectInferenceResult {
@@ -28,24 +26,21 @@ export interface DirectInferenceResult {
 }
 
 let _broker: ZGComputeNetworkBroker | null = null;
-let _brokerAddress: string | null = null;
 
 /**
- * Get or create the 0G Compute broker for the connected wallet.
- * The broker is cached per wallet address — reconnecting with a different
- * wallet resets it.
+ * Get or create the 0G Compute broker using a dedicated 0G testnet key.
+ * The user's wallet stays on Whitechain for Enigma payments; this separate
+ * signer handles 0G Compute settlement on chain 16602.
  */
-export async function getBroker(
-  walletProvider: unknown
-): Promise<ZGComputeNetworkBroker> {
-  const ethProvider = new BrowserProvider(walletProvider as never);
-  const signer = await ethProvider.getSigner();
-  const address = await signer.getAddress();
+export async function getBroker(): Promise<ZGComputeNetworkBroker> {
+  if (_broker) return _broker;
 
-  if (_broker && _brokerAddress === address) return _broker;
+  const pk = process.env.NEXT_PUBLIC_ZG_COMPUTE_KEY;
+  if (!pk) throw new Error("NEXT_PUBLIC_ZG_COMPUTE_KEY not set — direct TEE mode unavailable");
 
+  const provider = new JsonRpcProvider(ZG_RPC, ZG_CHAIN_ID);
+  const signer = new Wallet(pk, provider);
   _broker = await createZGComputeNetworkBroker(signer);
-  _brokerAddress = address;
   return _broker;
 }
 
@@ -228,29 +223,17 @@ export async function runDirectInference(
 }
 
 /**
- * Check if the user's wallet is on the 0G testnet chain.
+ * Check if direct TEE mode can be set up (key configured + providers exist).
  */
-export async function isOn0GChain(walletProvider: unknown): Promise<boolean> {
+export async function checkDirectTeeAvailable(): Promise<{
+  available: boolean;
+  reason?: string;
+}> {
   try {
-    const ethProvider = new BrowserProvider(walletProvider as never);
-    const network = await ethProvider.getNetwork();
-    return Number(network.chainId) === ZG_CHAIN_ID;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if direct TEE mode is available (wallet on 0G chain + providers exist).
- */
-export async function checkDirectTeeAvailable(
-  walletProvider: unknown
-): Promise<{ available: boolean; reason?: string }> {
-  try {
-    if (!(await isOn0GChain(walletProvider))) {
-      return { available: false, reason: "Wallet not on 0G testnet (chain 16602)" };
+    if (!process.env.NEXT_PUBLIC_ZG_COMPUTE_KEY) {
+      return { available: false, reason: "NEXT_PUBLIC_ZG_COMPUTE_KEY not set" };
     }
-    const broker = await getBroker(walletProvider);
+    const broker = await getBroker();
     const providers = await discoverTeeProviders(broker);
     if (providers.length === 0) {
       return { available: false, reason: "No TeeML providers available on 0G Compute" };

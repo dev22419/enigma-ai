@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { useAccount, useSignMessage } from "wagmi";
+import { useSignMessage } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
@@ -112,20 +112,18 @@ export function Chat({ samples }: { samples: Sample[] }) {
   // Real jobs are paid from the connected wallet's balance, by its signature. Previews and demo mode skip this.
   const { gate, credit } = useGate(threadPreview);
   const { signMessageAsync } = useSignMessage();
-  const { connector } = useAccount();
   const [directTee, setDirectTee] = useState<DirectTeeConfig | null>(null);
   const [directTeeStatus, setDirectTeeStatus] = useState<"idle" | "checking" | "ready" | "unavailable">("idle");
 
-  // Try to set up direct TEE mode when a wallet connector is available.
+  // Try to set up direct TEE mode (uses a dedicated 0G key, independent of wallet chain).
   useEffect(() => {
-    if (!connector || threadPreview || SERVICE_PAID) return;
+    if (threadPreview || SERVICE_PAID) return;
     let cancelled = false;
     setDirectTeeStatus("checking");
     (async () => {
       try {
-        const provider = await connector.getProvider();
         const { getBroker, discoverTeeProviders, ensureProviderReady } = await import("@/lib/client/direct-tee");
-        const broker = await getBroker(provider);
+        const broker = await getBroker();
         const providers = await discoverTeeProviders(broker);
         if (cancelled) return;
         if (providers.length === 0) {
@@ -142,7 +140,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [connector, threadPreview]);
+  }, [threadPreview]);
 
   // Follow the conversation as it grows (new messages, answers arriving), unless you've scrolled up to read.
   const scroller = useRef<HTMLDivElement>(null);

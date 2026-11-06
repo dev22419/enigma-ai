@@ -83,17 +83,17 @@ describe("direct TEE inference", () => {
 
     // The fetch should go to the provider's endpoint, NOT to /api/infer
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0];
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://tee-provider.example.com/v1/proxy/chat/completions");
     expect(url).not.toContain("/api/infer");
 
     // The body should include the system prompt (built browser-side)
-    const body = JSON.parse(init?.body as string);
+    const body = JSON.parse(init.body as string);
     expect(body.messages[0].role).toBe("system");
     expect(body.messages[0].content).toContain("clinical document analyst");
 
     // Auth headers come from the broker, not from our backend's access token
-    const headers = init?.headers as Record<string, string>;
+    const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer mock-0g-auth-token");
 
     vi.unstubAllGlobals();
@@ -149,7 +149,7 @@ describe("direct TEE inference", () => {
 
     await runDirectInference(broker as never, provider, "financial", "Q3 revenue: 4.2 crore");
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    const body = JSON.parse((fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     expect(body.verify_tee).toBe(true);
     expect(body.max_tokens).toBe(8192);
 
@@ -181,7 +181,7 @@ describe("direct TEE inference", () => {
       "image/png"
     );
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    const body = JSON.parse((fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     const userMsg = body.messages[1];
     expect(userMsg.content[1].type).toBe("image_url");
     expect(userMsg.content[1].image_url.url).toContain("data:image/png;base64,BASE64DATA");
