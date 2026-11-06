@@ -1,0 +1,42 @@
+SYNTHETIC DEMO DOCUMENT. Every name, number and date below is invented. It describes no real person.
+
+CITY GENERAL HOSPITAL - OUTPATIENT CLINIC SUMMARY
+Patient:        Jordan Example (demo patient 0001)
+Date of birth:  1971-04-12        Sex: F
+Visit date:     2026-10-28        Clinician: Dr. A. Sample
+
+REASON FOR VISIT
+Follow-up for type 2 diabetes and elevated blood pressure. Reports increased thirst
+and occasional dizziness on standing over the last three weeks.
+
+HISTORY
+- Type 2 diabetes mellitus, diagnosed 2019
+- Hypertension, diagnosed 2021
+- Penicillin allergy (rash)
+- Non-smoker, occasional alcohol
+
+CURRENT MEDICATIONS
+- Metformin 1000 mg twice daily
+- Lisinopril 10 mg once daily
+- Atorvastatin 20 mg at night
+
+EXAMINATION AND RESULTS
+Blood pressure   148/94 mmHg (previous visit 138/88)
+Heart rate       78 bpm, regular
+Weight           86 kg (previous 84 kg)
+HbA1c            8.9 %   (target < 7.0 %; previous 8.1 %)
+Fasting glucose  11.2 mmol/L
+LDL cholesterol  3.4 mmol/L
+eGFR             71 mL/min/1.73m2 (previous 76)
+Urine albumin/creatinine ratio  4.1 mg/mmol (mildly raised)
+
+ASSESSMENT
+Glycaemic control has worsened over six months. Blood pressure above target.
+Mild decline in kidney function with mildly raised urine albumin; needs monitoring.
+
+PLAN
+1. Add a second glucose-lowering agent; review options at the next visit.
+2. Increase lisinopril to 20 mg once daily. Recheck potassium and creatinine in 2 weeks.
+3. Dietitian referral. Home blood pressure log for 2 weeks.
+4. Repeat HbA1c and urine albumin/creatinine ratio in 3 months.
+5. Retinal screening is overdue; book this month.
