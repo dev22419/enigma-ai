@@ -9,7 +9,7 @@ Enigma AI is a B2B API that lets hospitals, law firms, and banks use AI on sensi
 ## How It Works
 
 1. **Upload** — Company sends a sensitive document via API
-2. **Encrypt** — File encrypted client-side before leaving the device
+2. **Encrypt** — File encrypted by the backend with a per-job key before leaving the device
 3. **Store** — Encrypted file uploaded to 0G Storage (decentralized)
 4. **Pay** — Credit deducted from prepaid USDT balance (Whitechain)
 5. **Process** — AI analyzes the document inside a sealed hardware enclave (0G TEE) — nobody can see the data, not even the machine operator
@@ -109,3 +109,16 @@ npm run dev
 ## License
 
 MIT
+
+
+## Running the app
+
+```bash
+cp .env.example .env          # fill in real values; ORACLE_PRIVATE_KEY must be a 32-byte hex key
+cd frontend && ln -s ../.env .env   # Next.js reads env from the app directory
+npm install && npm run dev
+npm test                      # crypto envelope and key lifecycle tests
+npx tsx scripts/smoke-arkiv.mts 60   # does a 60s Arkiv entity really expire? (needs a funded Rabdi key)
+```
+
+Keys, destruction receipts and job metadata are kept in `frontend/.enigma-data/store.json` (git-ignored), so run the app as one long-lived Node process, not serverless.
