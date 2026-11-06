@@ -270,7 +270,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
   return (
-    <label className="relative flex items-center gap-1 rounded-md px-2 py-1 text-[13px] text-frost/60 transition-colors hover:bg-frost/[0.05] hover:text-frost">
+    <label className="relative flex items-center gap-1 rounded-full bg-frost/[0.06] py-1 pr-2 pl-3 text-[13px] text-frost/75 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-colors hover:bg-frost/[0.1] hover:text-frost">
       <span className="sr-only">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="cursor-pointer appearance-none bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
         {children}
@@ -363,7 +363,7 @@ function Composer({
   return (
     <div>
       <div
-        className="rounded-[18px] border border-frost/[0.12] bg-night-2/80 transition-[border-color,box-shadow] focus-within:border-frost/25 focus-within:shadow-[0_0_0_4px_rgb(2_151_222/0.08)]"
+        className="beam"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -394,10 +394,10 @@ function Composer({
           placeholder={att?.kind === "image" ? "The image is sent on its own." : att ? "Add a note (optional)" : "Paste a document or attach one"}
           className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none disabled:opacity-50"
         />
-        <div className="flex items-center gap-0.5 px-2 pb-2">
+        <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
           <button
             onClick={() => file.current?.click()}
-            className="grid size-8 place-items-center rounded-md text-frost/50 transition-colors hover:bg-frost/[0.05] hover:text-frost"
+            className="grid size-[30px] place-items-center rounded-full bg-frost/[0.06] text-frost/70 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-colors hover:bg-frost/[0.1] hover:text-frost"
             aria-label="Attach a text file or image"
             title="Attach a text file or image"
           >

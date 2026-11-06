@@ -448,6 +448,85 @@ body {
   mask: radial-gradient(6px at 50% 100%, transparent 98%, #000) 0 100% / 18px 100% repeat-x;
 }
 
+/* ---------------------------------------------------------------- app */
+/* The app runs on true black with neutral greys; Electric Blue and Cantaloupe are the only colours */
+.app-theme {
+  --night: #000;
+  --night-2: #0c0c0c;
+  --night-3: #161616;
+  --night-line: rgb(255 255 255 / 0.09);
+  --frost: #f2f5f7;
+  --frost-soft: #9a9ea3;
+  --color-night: #000;
+  --color-night-2: #0c0c0c;
+  --color-night-3: #161616;
+  --color-night-line: rgb(255 255 255 / 0.09);
+  --color-frost: #f2f5f7;
+  --color-frost-soft: #9a9ea3;
+}
+@property --beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+/* A point of light riding the composer's border, with a soft glow behind it */
+.beam {
+  position: relative;
+  isolation: isolate;
+  border-radius: 20px;
+  background: #0c0c0c;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+.beam::before,
+.beam::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  background: conic-gradient(from var(--beam-angle), transparent 0 58%, #0297de 70%, #5cc4ff 76%, #fc734d 86%, transparent 96%);
+  animation: beam-spin 5.5s linear infinite;
+}
+.beam::before {
+  inset: 0;
+  padding: 1.5px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.beam::after {
+  inset: -2px;
+  z-index: -1;
+  filter: blur(22px);
+  opacity: 0.2;
+}
+.beam:focus-within::before,
+.beam:focus-within::after {
+  animation-duration: 2.6s;
+}
+.beam:focus-within::after {
+  opacity: 0.34;
+}
+.live-dot {
+  animation: live-dot 1.6s ease-in-out infinite;
+}
+@keyframes live-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .beam::before,
+  .beam::after,
+  .live-dot {
+    animation: none;
+  }
+}
+
 /* ---------------------------------------------------------------- glass nav */
 .glass-nav {
   position: fixed;

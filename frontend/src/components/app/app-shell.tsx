@@ -1,7 +1,7 @@
 // AI-assisted: Used Claude to write this file.
 "use client";
 
-import { SquarePen } from "lucide-react";
+import { LayoutGrid, MessageSquare, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
@@ -27,13 +27,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
     <KeyWiper />
-    <div className="flex min-h-dvh flex-col bg-night text-frost lg:flex-row">
-      <Suspense fallback={<aside className="shrink-0 lg:w-[16rem]" />}>
+    <div className="app-theme flex min-h-dvh flex-col bg-night text-frost lg:flex-row">
+      <Suspense fallback={<aside className="shrink-0 lg:w-[calc(56px+15.5rem)]" />}>
         <Sidebar />
       </Suspense>
       <div className="relative min-w-0 flex-1">
-        {/* A single, faint pool of light at the top of the workspace */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_50%_60%_at_50%_0%,rgb(2_151_222/0.09),transparent_70%)]" aria-hidden="true" />
         <div className="relative">{children}</div>
       </div>
     </div>
@@ -64,12 +62,37 @@ function Sidebar() {
     else groups.push([label, [t]]);
   }
 
+  const onChat = path === "/chat" || path.startsWith("/job");
+  const rail: [string, string, typeof MessageSquare, boolean][] = [
+    ["/chat", "Chat", MessageSquare, onChat],
+    ["/dashboard", "Ledger", LayoutGrid, path === "/dashboard"],
+  ];
+
   return (
-    <aside className="flex shrink-0 flex-col border-frost/[0.06] max-lg:border-b lg:sticky lg:top-0 lg:h-dvh lg:w-[16rem] lg:border-r">
+    <div className="flex shrink-0 lg:sticky lg:top-0 lg:h-dvh">
+      <nav aria-label="Workspace" className="hidden w-14 flex-col items-center gap-1 border-r border-frost/[0.07] py-3 lg:flex">
+        <Link href="/" aria-label="Enigma home" className="mb-3 grid size-9 place-items-center [&_span>span]:hidden">
+          <Logo />
+        </Link>
+        {rail.map(([href, label, Icon, on]) => (
+          <Link
+            key={href}
+            href={href}
+            aria-label={label}
+            title={label}
+            className={cn("relative grid size-9 place-items-center rounded-[10px] transition-colors", on ? "bg-frost/[0.09] text-frost" : "text-frost/50 hover:bg-frost/[0.05] hover:text-frost")}
+          >
+            {on && <i className="absolute top-2 -left-[10px] h-5 w-[3px] rounded-r-full bg-melon" />}
+            <Icon className="size-[18px]" strokeWidth={1.7} />
+          </Link>
+        ))}
+      </nav>
+    <aside className="flex min-w-0 flex-1 flex-col border-frost/[0.07] max-lg:border-b lg:w-[15.5rem] lg:flex-none lg:border-r">
       <div className="flex h-14 items-center justify-between px-4">
-        <Link href="/" aria-label="Enigma home" className="opacity-90 transition-opacity hover:opacity-100">
+        <Link href="/" aria-label="Enigma home" className="opacity-90 transition-opacity hover:opacity-100 lg:hidden">
           <Logo className="[&_span]:text-[17px]" />
         </Link>
+        <p className="text-[14px] font-semibold max-lg:hidden">Conversations</p>
         <Link href="/chat" aria-label="New conversation" title="New conversation" className="grid size-8 place-items-center rounded-md text-frost/60 transition-colors hover:bg-frost/[0.06] hover:text-frost">
           <SquarePen className="size-[17px]" strokeWidth={1.75} />
         </Link>
@@ -109,7 +132,7 @@ function Sidebar() {
         ))}
       </div>
 
-      <div className="space-y-0.5 border-frost/[0.06] px-2 py-3 max-lg:flex max-lg:gap-1 max-lg:space-y-0 max-lg:pt-0 lg:border-t">
+      <div className="space-y-0.5 border-frost/[0.07] px-2 py-3 max-lg:flex max-lg:gap-1 max-lg:space-y-0 max-lg:pt-0 lg:border-t">
         {[
           ["/chat", "Chat", path === "/chat" || path.startsWith("/job")],
           ["/dashboard", "Ledger", path === "/dashboard"],
@@ -117,7 +140,7 @@ function Sidebar() {
           <Link
             key={href as string}
             href={href as string}
-            className={cn("block rounded-md px-2 py-1.5 text-[13.5px] transition-colors", on ? "text-frost" : "text-frost/55 hover:text-frost")}
+            className={cn("block rounded-md px-2 py-1.5 text-[13.5px] transition-colors lg:hidden", on ? "text-frost" : "text-frost/55 hover:text-frost")}
           >
             {label}
           </Link>
@@ -125,5 +148,6 @@ function Sidebar() {
         <WalletBox />
       </div>
     </aside>
+    </div>
   );
 }
