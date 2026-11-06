@@ -1,5 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
+const NONCE_BYTES = 12;
+const TAG_BYTES = 16;
+
 export type ObjectType = "input" | "result";
 
 export interface Envelope {
@@ -33,8 +36,8 @@ export function encrypt(
   aad: { jobId: string; objectType: ObjectType }
 ): Envelope {
   // A fresh 12-byte nonce for every call. Never reuse one under the same key.
-  const nonce = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, nonce);
+  const nonce = randomBytes(NONCE_BYTES);
+  const cipher = createCipheriv("aes-256-gcm", key, nonce, { authTagLength: TAG_BYTES });
   cipher.setAAD(aadBytes(keyId, aad.jobId, aad.objectType));
   const data = typeof plaintext === "string" ? Buffer.from(plaintext, "utf8") : plaintext;
   const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
@@ -60,9 +63,15 @@ export function decrypt(
   if (envelope.aad.jobId !== expected.jobId || envelope.aad.objectType !== expected.objectType) {
     throw new Error("Envelope does not belong to this job/object");
   }
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(envelope.nonce, "base64"));
+  // Pin the sizes. Node otherwise accepts GCM tags as short as 4 bytes, which would let someone who
+  // can edit a stored envelope truncate the tag and cut the forgery resistance to 2^-32.
+  const nonce = Buffer.from(envelope.nonce, "base64");
+  const tag = Buffer.from(envelope.tag, "base64");
+  if (nonce.length !== NONCE_BYTES) throw new Error("Invalid nonce length");
+  if (tag.length !== TAG_BYTES) throw new Error("Invalid authentication tag length");
+  const decipher = createDecipheriv("aes-256-gcm", key, nonce, { authTagLength: TAG_BYTES });
   decipher.setAAD(aadBytes(envelope.keyId, envelope.aad.jobId, envelope.aad.objectType));
-  decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
+  decipher.setAuthTag(tag);
   return Buffer.concat([
     decipher.update(Buffer.from(envelope.ciphertext, "base64")),
     decipher.final(),
