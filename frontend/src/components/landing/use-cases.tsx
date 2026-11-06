@@ -1,106 +1,104 @@
 // AI-assisted: Used Claude to write this file.
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
-import { useId, useState } from "react";
+import { useMemo } from "react";
 
-import { cn } from "@/lib/utils";
+import { LiveCanvas, noise, type Paint } from "./live-canvas";
+import { Reveal } from "./reveal";
 
 /** One entry per task type the API accepts (TASK_TYPES in src/lib/constants.ts). */
 const CASES = [
   {
-    key: "medical",
     who: "Clinics",
-    file: "outpatient_summary.pdf",
-    gets: ["Summary", "Key findings with units", "Medications", "Items needing clinician attention"],
+    task: "Medical records",
     life: "1 hour",
-    why: "Enough time to write the referral letter. After that, no copy of the record is readable anywhere.",
+    seconds: 3600,
+    why: "Enough time to write the referral letter.",
+    gets: ["Summary", "Key findings", "Medications", "Items needing attention"],
   },
   {
-    key: "legal",
     who: "Law firms",
-    file: "supply-agreement.pdf",
-    gets: ["Parties and dates", "Key obligations", "Termination and renewal", "Risky or unusual clauses"],
+    task: "Contracts",
     life: "7 days",
-    why: "A week to negotiate the draft. The receipt shows the review happened without disclosing the contract.",
+    seconds: 604800,
+    why: "A week to negotiate the draft.",
+    gets: ["Parties and dates", "Obligations", "Renewal terms", "Unusual clauses"],
   },
   {
-    key: "financial",
     who: "Banks",
-    file: "q3_statement.pdf",
-    gets: ["Key figures", "Trends against prior periods", "Risks and anomalies", "Open questions"],
+    task: "Financial statements",
     life: "30 days",
-    why: "Long enough for a month-end review. Customer data never becomes another database to protect.",
+    seconds: 2592000,
+    why: "Long enough for a month-end review.",
+    gets: ["Key figures", "Trends", "Anomalies", "Open questions"],
   },
 ];
 
-export function UseCases() {
-  const [active, setActive] = useState(0);
-  const id = useId();
-  const c = CASES[active];
+const MIN = Math.log(60);
+const MAX = Math.log(2592000);
 
+/** Bars from one minute to 30 days on a log scale, lit up to this lifespan. */
+function lifeBars(seconds: number): Paint {
+  const reach = (Math.log(seconds) - MIN) / (MAX - MIN);
+  return (ctx, w, h, t) => {
+    const bars = Math.floor(w / 7);
+    for (let i = 0; i < bars; i++) {
+      const p = i / (bars - 1);
+      const wave = 0.4 + 0.42 * (0.5 + 0.5 * Math.sin(t * 2.2 + i * 0.42)) + 0.18 * noise(i, 4);
+      const height = Math.max(3, wave * h);
+      const on = p <= reach;
+      ctx.fillStyle = on ? (p > reach - 0.04 ? "rgb(252,115,77)" : "rgb(238,238,238)") : "rgba(238,238,238,0.1)";
+      ctx.fillRect(i * 7, on ? h - height : h - height * 0.3, 3.5, on ? height : height * 0.3);
+    }
+  };
+}
+
+function CaseCard({ c }: { c: (typeof CASES)[number] }) {
+  const paint = useMemo(() => lifeBars(c.seconds), [c.seconds]);
   return (
-    <section className="relative text-frost">
-      <div className="mx-auto max-w-[1280px] px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12">
-        <p className="max-w-[30rem] text-[17px] leading-relaxed text-frost-soft">Who it&rsquo;s for</p>
+    <article className="panel flex flex-col p-6">
+      <p className="flex items-baseline justify-between text-[15px]">
+        <span className="font-semibold">{c.who}</span>
+        <span className="font-mono text-[11.5px] text-frost-soft">{c.task}</span>
+      </p>
+      <p className="display mt-6 text-[clamp(2.75rem,5vw,3.75rem)]">{c.life}</p>
+      <p className="mt-2 text-[15.5px] text-frost/85">{c.why}</p>
 
-        <div role="tablist" aria-label="Who uses Enigma" className="mt-4 flex flex-col items-start gap-1 md:flex-row md:flex-wrap md:gap-x-10">
-          {CASES.map((x, i) => (
-            <button
-              key={x.key}
-              role="tab"
-              id={`${id}-t${i}`}
-              aria-selected={active === i}
-              aria-controls={`${id}-p`}
-              onClick={() => setActive(i)}
-              className={cn(
-                "display relative text-[clamp(2.4rem,5.4vw,4.6rem)] whitespace-nowrap transition-colors",
-                active === i ? "text-frost" : "text-frost/20 hover:text-frost/45",
-              )}
-            >
-              {active === i && (
-                <motion.span layoutId={`${id}-mark`} className="absolute inset-x-[-0.06em] bottom-[0.04em] h-[0.12em] rounded-full bg-melon" />
-              )}
-              <span className="relative">{x.who}</span>
-            </button>
+      <div className="mt-6 h-20">
+        <LiveCanvas paint={paint} />
+      </div>
+      <p className="mt-2 flex justify-between font-mono text-[11px] text-frost-soft">
+        <span>1 min</span>
+        <span>30 days</span>
+      </p>
+
+      <ul className="mt-5 flex flex-wrap gap-1.5 border-t border-frost/10 pt-5">
+        {c.gets.map((g) => (
+          <li key={g} className="rounded-full border border-frost/14 px-2.5 py-1 text-[13px] text-frost/85">
+            {g}
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+export function UseCases() {
+  return (
+    <section id="who" className="section text-frost">
+      <Reveal className="shell">
+        <div className="text-center">
+          <p className="eyebrow">05 Who it&rsquo;s for</p>
+          <h2 className="heading">For work that can&rsquo;t leak</h2>
+          <p className="lede">Each team gets a structured answer, kept only as long as the job needs it.</p>
+        </div>
+
+        <div className="mt-14 grid gap-3 md:mt-20 md:grid-cols-3">
+          {CASES.map((c) => (
+            <CaseCard key={c.who} c={c} />
           ))}
         </div>
-
-        <div id={`${id}-p`} role="tabpanel" aria-labelledby={`${id}-t${active}`} className="mt-12 min-h-[12rem]">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={c.key}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2 }}
-              className="grid gap-8 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:gap-16"
-            >
-              <div className="overflow-hidden rounded-[10px] border border-night-line bg-night">
-                <div className="flex items-center justify-between border-b border-night-line px-4 py-2.5 font-mono text-[11.5px]">
-                  <span>{c.file}</span>
-                  <span className="text-frost-soft">task: {c.key}</span>
-                </div>
-                <div className="px-4 py-5">
-                  <p className="text-[13px] text-frost-soft">The answer comes back in these sections</p>
-                  <ul className="mt-3 flex flex-wrap gap-2">
-                    {c.gets.map((g) => (
-                      <li key={g} className="rounded-full border border-volt/40 bg-volt/10 px-3 py-1 text-[13.5px] text-frost">
-                        {g}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <div>
-                <p className="font-mono text-[11.5px] text-frost-soft">typical lifespan</p>
-                <p className="display mt-1 text-[3rem] text-melon">{c.life}</p>
-                <p className="mt-3 text-[15px] leading-relaxed text-frost/75">{c.why}</p>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

@@ -1,12 +1,12 @@
-// AI-assisted: Used Claude to write this file. NumberTicker is from Magic UI (via 21st.dev).
+// AI-assisted: Used Claude to write this file.
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useReducedMotion } from "motion/react";
+import { useInView, useReducedMotion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { NumberTicker } from "@/components/ui/number-ticker";
 import { cn } from "@/lib/utils";
+import { LiveCanvas, noise, type Paint } from "./live-canvas";
+import { Reveal } from "./reveal";
 
 /** The range the API accepts: ttl between 60 seconds and 30 days. */
 const OPTIONS = [
@@ -15,13 +15,39 @@ const OPTIONS = [
   { label: "7 days", long: "7 days", ttl: 604800 },
   { label: "30 days", long: "30 days", ttl: 2592000 },
 ];
-const SIM = 8; // seconds to play a whole lifespan
+const SIM = 9; // seconds to play a whole lifespan
+const REST = 2600; // pause on "destroyed" before it plays again
 
 const RESULT = [
   ["Key obligations", "Supplier must give 90 days' notice before ending the agreement."],
   ["Unusual clause", "Clause 14.2 caps liability at one month of fees."],
   ["Renewal", "Renews automatically each year unless cancelled 60 days before."],
 ];
+
+/** 5x7 LED glyphs, one string per row. */
+const FONT: Record<string, string[]> = {
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00110", "01000", "10000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "11110", "00001", "00001", "10001", "01110"],
+  "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
+  ":": ["0", "1", "1", "0", "1", "1", "0"],
+  d: ["00001", "00001", "01101", "10011", "10001", "10011", "01101"],
+  " ": ["000", "000", "000", "000", "000", "000", "000"],
+};
+
+/** Eats a string as time runs out. Stable per character, so it decays instead of flickering. */
+function decay(text: string, amount: number) {
+  const glyphs = "0123456789abcdef";
+  return [...text]
+    .map((c, i) => (c !== " " && ((i * 37 + text.length * 11) % 100) / 100 < amount ? glyphs[(i * 7) % 16] : c))
+    .join("");
+}
 
 function clock(sec: number) {
   const s = Math.max(0, Math.ceil(sec));
@@ -34,139 +60,172 @@ function clock(sec: number) {
   return h ? `${p(h)}:${p(m)}:${p(r)}` : `${p(m)}:${p(r)}`;
 }
 
+/** Lit cells for a string, centred on a cols x rows grid. */
+function ledCells(text: string, cols: number, rows: number) {
+  const glyphs = [...text].map((c) => FONT[c] ?? FONT[" "]);
+  const width = glyphs.reduce((sum, g) => sum + g[0].length + 1, -1);
+  const scale = Math.max(1, Math.min(Math.floor((cols * 0.86) / width), Math.floor((rows * 0.8) / 7)));
+  const ox = Math.floor((cols - width * scale) / 2);
+  const oy = Math.floor((rows - 7 * scale) / 2);
+  const cells = new Set<number>();
+  let cx = 0;
+  for (const g of glyphs) {
+    g.forEach((row, y) =>
+      [...row].forEach((bit, x) => {
+        if (bit !== "1") return;
+        for (let sx = 0; sx < scale; sx++) {
+          for (let sy = 0; sy < scale; sy++) cells.add((oy + y * scale + sy) * cols + ox + (cx + x) * scale + sx);
+        }
+      }),
+    );
+    cx += g[0].length + 1;
+  }
+  return cells;
+}
+
 export function SelfDestruct() {
   const [choice, setChoice] = useState(1);
   const [frac, setFrac] = useState(1);
-  const [running, setRunning] = useState(false);
-  const raf = useRef(0);
+  const box = useRef<HTMLDivElement>(null);
+  const inView = useInView(box, { margin: "-10% 0px" });
   const reduce = useReducedMotion();
   const ttl = OPTIONS[choice].ttl;
   const gone = frac <= 0;
   const late = !gone && frac < 0.3;
 
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
-
-  function run() {
-    cancelAnimationFrame(raf.current);
-    setFrac(1);
-    if (reduce) return setFrac(0);
-    setRunning(true);
-    const t0 = performance.now();
-    const tick = (now: number) => {
-      const f = Math.max(0, 1 - (now - t0) / 1000 / SIM);
-      setFrac(f);
-      if (f > 0) raf.current = requestAnimationFrame(tick);
-      else setRunning(false);
+  // Plays on its own while on screen, and starts over when a lifespan is picked.
+  useEffect(() => {
+    if (!inView || reduce) return;
+    let raf = 0;
+    let wait = 0;
+    const play = () => {
+      const t0 = performance.now();
+      const tick = (now: number) => {
+        const f = Math.max(0, 1 - (now - t0) / 1000 / SIM);
+        setFrac(f);
+        if (f > 0) raf = requestAnimationFrame(tick);
+        else wait = window.setTimeout(play, REST);
+      };
+      raf = requestAnimationFrame(tick);
     };
-    raf.current = requestAnimationFrame(tick);
-  }
+    play();
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(wait);
+    };
+  }, [inView, reduce, choice]);
 
-  function pick(i: number) {
-    cancelAnimationFrame(raf.current);
-    setRunning(false);
-    setFrac(1);
-    setChoice(i);
-  }
+  const paint = useCallback<Paint>(
+    (ctx, w, h, t) => {
+      const gap = w < 640 ? 6 : 8;
+      const cols = Math.floor(w / gap);
+      const rows = Math.floor(h / gap);
+      const left = (w - cols * gap) / 2;
+      const top = (h - rows * gap) / 2;
+      const lit = ledCells(gone ? "00:00" : clock(frac * ttl), cols, rows);
+      const edge = frac * cols;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const n = noise(x, y);
+          let fill: string;
+          if (lit.has(y * cols + x)) {
+            fill = gone ? "rgba(238,238,238,0.2)" : late ? "rgb(255,154,124)" : "rgb(238,238,238)";
+          } else if (!gone && x < edge) {
+            const twinkle = Math.max(0, Math.sin(t * 1.6 + n * 40));
+            fill = `rgba(255,154,124,${0.05 + 0.3 * twinkle * n})`;
+          } else {
+            fill = "rgba(238,238,238,0.045)";
+          }
+          if (!gone && Math.abs(x - edge) < 1.5) fill = "rgba(252,115,77,0.85)";
+          ctx.fillStyle = fill;
+          ctx.fillRect(left + x * gap + 1, top + y * gap + 1, gap - 2.5, gap - 2.5);
+        }
+      }
+    },
+    [frac, ttl, gone, late],
+  );
+
+  const status = [
+    { name: "Answer on Arkiv", live: "Encrypted, stored", dead: "Dropped" },
+    { name: "Key in your browser", live: "Held", dead: "Wiped" },
+    { name: "Receipt on Whitechain", live: "Waiting for expiry", dead: "Recorded" },
+  ];
 
   return (
-    <section id="lifespan" className="relative overflow-hidden text-frost">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] bg-[radial-gradient(ellipse_50%_60%_at_70%_100%,rgb(2_151_222/0.22),transparent_70%)]" aria-hidden="true" />
-      <div className="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-14 px-4 pt-4 pb-8 sm:px-8 md:pt-6 md:pb-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
-        <div>
-          <h2 className="display text-[clamp(2.2rem,5vw,4.2rem)]">You choose when the answer dies</h2>
-          <p className="mt-6 max-w-[27rem] text-[17px] leading-relaxed text-frost/75">
-            Set a lifespan from one minute to 30 days. When it ends, Arkiv drops the encrypted answer and
-            your browser wipes the only key that opens it. Any copy left anywhere stays locked for good.
-          </p>
+    <section id="lifespan" className="section text-frost">
+      <Reveal className="shell">
+        <div className="text-center">
+          <p className="eyebrow">03 Lifespan</p>
+          <h2 className="heading">You choose when the answer dies</h2>
+          <p className="lede">Set a timer from one minute to 30 days. When it hits zero, the answer can&rsquo;t be read by anyone.</p>
+        </div>
 
-          <div className="mt-10" role="radiogroup" aria-label="Lifespan">
-            <div className="grid grid-cols-4 overflow-hidden rounded-[8px] border border-frost/20">
+        <div ref={box} className="panel mt-14 overflow-hidden md:mt-20">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-frost/10 px-5 py-3">
+            <p className={cn("font-mono text-[12px]", gone ? "text-melon-lit" : "text-frost-soft")}>
+              {gone ? "key destroyed" : "key destroyed in"}
+              <span className="sr-only"> {clock(frac * ttl)}</span>
+            </p>
+            <div className="flex gap-1" role="radiogroup" aria-label="Lifespan">
               {OPTIONS.map((o, i) => (
                 <button
                   key={o.ttl}
                   role="radio"
                   aria-checked={choice === i}
-                  onClick={() => pick(i)}
+                  onClick={() => {
+                    setFrac(1);
+                    setChoice(i);
+                  }}
                   className={cn(
-                    "h-12 text-[14px] font-semibold transition-colors",
-                    i > 0 && "border-l border-frost/20",
-                    choice === i ? "bg-frost text-night" : "text-frost-soft hover:bg-frost/8 hover:text-frost",
+                    "rounded-full px-3 py-1.5 text-[13.5px] transition-colors",
+                    choice === i ? "bg-frost font-semibold text-night" : "text-frost-soft hover:text-frost",
                   )}
                 >
                   {o.label}
                 </button>
               ))}
             </div>
-            <p className="mt-4 font-mono text-[12px] text-frost-soft">
-              &quot;ttl&quot;:{" "}
-              <NumberTicker key={ttl} value={ttl} startValue={Math.round(ttl * 0.5)} useGrouping={false} className="tracking-normal text-volt-lit dark:text-volt-lit" />
-              <span className="ml-2">seconds in the request</span>
-            </p>
           </div>
-        </div>
-
-        <div className="relative rounded-[12px] border border-night-line bg-night-2/90 p-6 shadow-[0_30px_90px_-40px_rgb(2_151_222/0.5)] sm:p-8">
-          <div className="flex items-baseline justify-between gap-4 font-mono text-[11px] text-frost-soft">
-            <span>supply-agreement.pdf, legal review</span>
-            <span>Sample</span>
+          <div className="h-[clamp(190px,27vw,340px)]">
+            <LiveCanvas paint={paint} />
           </div>
-
-          <div className="mt-6 flex flex-wrap items-end justify-between gap-6">
-            <div>
-              <p className="font-mono text-[11px] text-frost-soft">{gone ? "key destroyed" : "key destroyed in"}</p>
-              <p
-                className={cn(
-                  "display num mt-1 text-[clamp(2.8rem,7vw,5.6rem)] leading-[0.85] tracking-[-0.03em] transition-colors",
-                  gone ? "text-frost/25" : late ? "text-melon" : "text-frost",
-                )}
-              >
-                {clock(frac * ttl)}
-              </p>
-            </div>
-            <Button onClick={run} disabled={running} variant={gone ? "outline-frost" : "primary"} className="mb-1">
-              {gone ? "Run it again" : running ? "Running…" : "Run the timer"}
-            </Button>
-          </div>
-
-          <div className="relative mt-5 h-2 rounded-full bg-frost/10">
-            <div
-              className={cn("absolute inset-y-0 left-0 w-full origin-left rounded-full transition-colors", late ? "bg-melon" : "bg-volt")}
-              style={{ transform: `scaleX(${frac})` }}
-            />
-            {running && (
-              <span
-                className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-frost shadow-[0_0_0_4px_rgb(92_196_255/0.3),0_0_18px_rgb(92_196_255/0.9)]"
-                style={{ left: `${frac * 100}%` }}
-              />
-            )}
-          </div>
-          <p className="mt-2 font-mono text-[11px] text-frost-soft/70">
-            {OPTIONS[choice].long}, sped up {Math.round(ttl / SIM).toLocaleString("en-US")} times
+          <p className="border-t border-frost/10 px-5 py-2.5 font-mono text-[11.5px] text-frost-soft">
+            Sample. {OPTIONS[choice].long}, sped up {Math.round(ttl / SIM).toLocaleString("en-US")} times.
           </p>
-
-          <dl className="relative mt-7 space-y-4 border-t border-night-line pt-6">
-            {RESULT.map(([k, v], i) => (
-              <div key={k} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-5">
-                <dt className="text-[13px] font-semibold text-frost-soft">{k}</dt>
-                <dd className="relative text-[15px] leading-snug">
-                  <span className={cn("transition-opacity duration-300", gone && "opacity-0")} style={{ transitionDelay: `${i * 90}ms` }}>
-                    {v}
-                  </span>
-                  <span
-                    className={cn("absolute inset-y-0.5 left-0 origin-left rounded-sm bg-frost/12 transition-transform duration-300", gone ? "scale-x-100" : "scale-x-0")}
-                    style={{ right: `${10 + i * 12}%`, transitionDelay: `${i * 90}ms` }}
-                  />
-                </dd>
-              </div>
-            ))}
-            {gone && (
-              <div className="stamp-in pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[6px] border-[4px] border-melon bg-night/50 px-4 py-1.5 text-melon">
-                <span className="display narrow block text-[clamp(2rem,5vw,3.2rem)] leading-none tracking-[0.02em]">DESTROYED</span>
-              </div>
-            )}
-          </dl>
         </div>
-      </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="panel p-6 md:col-span-2">
+            <h3 className="text-[18px] font-semibold">What the answer looks like over time</h3>
+            <dl className="mt-3">
+              {RESULT.map(([k, v]) => (
+                <div key={k} className="grid gap-1 border-t border-frost/10 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
+                  <dt className="text-[14px] text-frost-soft">{k}</dt>
+                  <dd className={cn("font-mono text-[13px] leading-snug transition-opacity duration-500", gone && "opacity-30")}>{decay(v, 1 - frac)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="panel p-6">
+            <h3 className="text-[18px] font-semibold">What happens at zero</h3>
+            <ul className="mt-3">
+              {status.map((s, i) => (
+                <li key={s.name} className="border-t border-frost/10 py-3">
+                  <p className="text-[14px] text-frost-soft">{s.name}</p>
+                  <p className="mt-0.5 flex items-center gap-2 text-[15px] font-semibold">
+                    <span
+                      className={cn("size-2 rounded-full transition-colors duration-300", gone ? "bg-melon" : "bg-volt-lit")}
+                      style={{ transitionDelay: `${i * 160}ms` }}
+                    />
+                    {gone ? s.dead : s.live}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </Reveal>
     </section>
   );
 }

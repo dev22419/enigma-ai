@@ -28,6 +28,7 @@ uniform float uTime;
 uniform vec2 uMouse;
 uniform float uRib;     // rib width in pixels
 uniform float uFocus;   // 0..1, how strongly the light gathers low and centre
+uniform float uExact;   // 1 keeps the palette's exact hues: no extra blue, no tone mapping
 
 const vec3 NIGHT = vec3(0.008, 0.027, 0.039);
 const vec3 BLUE  = vec3(0.008, 0.592, 0.871);
@@ -40,8 +41,19 @@ float blob(vec2 p, vec2 c, vec2 r) {
   return exp(-dot(d, d));
 }
 
+// Midnight Black on top, Electric Blue rising under it, Cantaloupe glowing low in the centre.
+// Colours are mixed, not added, so every pixel stays on the palette.
+vec3 exactScene(vec2 p, float t, float aspect) {
+  float rise = 0.8 + 0.035 * sin(p.x * 2.1 + t * 0.32);
+  vec3 col = mix(NIGHT, BLUE, smoothstep(rise, rise - 0.36, p.y));
+  float cx = aspect * (0.5 + 0.05 * sin(t * 0.19)) + (uMouse.x - 0.5) * aspect * 0.06;
+  float glow = blob(p, vec2(cx, 0.4), vec2(aspect * 0.36, 0.11));
+  return mix(col, MELON, clamp(glow * 1.25, 0.0, 1.0));
+}
+
 // The light behind the glass. p: x scaled by aspect, y in 0..1 (0 = bottom).
 vec3 scene(vec2 p, float t, float aspect) {
+  if (uExact > 0.5) return exactScene(p, t, aspect);
   vec2 m = uMouse * vec2(aspect, 1.0);
   vec3 col = NIGHT;
 
@@ -110,19 +122,20 @@ void main() {
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
   // Fresnel: edges reflect more, picking up the light around them
   float fres = pow(abs(tilt), 1.4);
-  c += fres * (0.55 * c + 0.10 * vec3(0.85, 0.92, 1.0));
+  float hi = mix(1.0, 0.12, uExact); // highlights tint the palette instead of washing it to white
+  c += fres * hi * (0.55 * c + 0.10 * vec3(0.85, 0.92, 1.0));
 
   // A soft glare that follows the pointer across the slabs
   vec3 L = normalize(vec3((uMouse.x - uv.x) * 1.8, 0.0, 0.55));
   vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
   float spec = pow(max(dot(n, H), 0.0), 140.0);
   float glare = exp(-pow((uv.y - (0.35 + 0.25 * uMouse.y)) * 2.2, 2.0)); // strongest at the pointer's height
-  c += spec * (0.35 + 1.4 * lum) * (0.35 + 0.65 * glare) * vec3(1.0, 0.98, 0.96);
+  c += spec * hi * (0.35 + 1.4 * lum) * (0.35 + 0.65 * glare) * vec3(1.0, 0.98, 0.96);
 
   // Bright hairlines where each bevel meets the face, darker one on the far side
   float bevelLit = exp(-pow((f - gap - 0.035) / 0.012, 2.0));
   float bevelDark = exp(-pow((f - (1.0 - gap - 0.03)) / 0.02, 2.0));
-  c += bevelLit * (0.08 + 0.9 * lum) * 0.55;
+  c += bevelLit * hi * (0.08 + 0.9 * lum) * 0.55;
   c *= 1.0 - 0.45 * bevelDark;
 
   // Seams between slabs: near black, with a faint cold edge
@@ -132,9 +145,12 @@ void main() {
   c *= 0.82 + 0.18 * smoothstep(0.0, 0.25, uv.y) * smoothstep(1.0, 0.8, uv.y);
 
   // Tone map so the colours run hot without clipping flat, then restore saturation
-  c = 1.0 - exp(-c * 1.1);
-  float g = dot(c, vec3(0.299, 0.587, 0.114));
-  c = clamp(mix(vec3(g), c, 1.3), 0.0, 1.0);
+  if (uExact < 0.5) {
+    c = 1.0 - exp(-c * 1.1);
+    float g = dot(c, vec3(0.299, 0.587, 0.114));
+    c = mix(vec3(g), c, 1.3);
+  }
+  c = clamp(c, 0.0, 1.0);
   c += (hash(frag + fract(t)) - 0.5) * 0.03;
   gl_FragColor = vec4(c, 1.0);
 }
@@ -153,7 +169,7 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
   return s;
 }
 
-export function FlutedGlass({ className, rib = 34, focus = 1 }: { className?: string; rib?: number; focus?: number }) {
+export function FlutedGlass({ className, rib = 34, focus = 1, exact = false }: { className?: string; rib?: number; focus?: number; exact?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -190,6 +206,7 @@ export function FlutedGlass({ className, rib = 34, focus = 1 }: { className?: st
     const uMouse = gl.getUniformLocation(prog, "uMouse");
     const uRib = gl.getUniformLocation(prog, "uRib");
     const uFocus = gl.getUniformLocation(prog, "uFocus");
+    const uExact = gl.getUniformLocation(prog, "uExact");
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let scale = 1;
@@ -220,6 +237,7 @@ export function FlutedGlass({ className, rib = 34, focus = 1 }: { className?: st
       gl.uniform2f(uMouse, mouse.x, mouse.y);
       gl.uniform1f(uRib, Math.max(14, rib * scale * (canvas.width < 600 ? 0.75 : 1)));
       gl.uniform1f(uFocus, focus);
+      gl.uniform1f(uExact, exact ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
@@ -263,7 +281,7 @@ export function FlutedGlass({ className, rib = 34, focus = 1 }: { className?: st
       gl.deleteShader(vs);
       gl.deleteShader(fs);
     };
-  }, [rib, focus]);
+  }, [rib, focus, exact]);
 
   return <canvas ref={ref} aria-hidden="true" className={cn("pointer-events-none absolute inset-0", className)} />;
 }
