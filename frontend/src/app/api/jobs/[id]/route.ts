@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobOnChain } from "@/lib/contract";
 import { fetchFromArkiv } from "@/lib/arkiv";
+import { decrypt, type EncryptedPayload } from "@/lib/crypto";
+import { getKeyByJobId, getDestructionReceipt } from "@/lib/key-store";
+import { runExpiryCheck } from "@/lib/expiry-worker";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -13,6 +16,9 @@ export async function GET(
       return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
     }
 
+    // Run expiry check on every read
+    await runExpiryCheck().catch(() => {});
+
     const job = await getJobOnChain(jobId);
     if (job.status === "None") {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -20,14 +26,26 @@ export async function GET(
 
     let result: string | null = null;
     let expired = false;
+    let keyDestroyed = false;
 
-    if (job.status === "Completed") {
+    const keyEntry = getKeyByJobId(String(jobId));
+    const destructionReceipt = getDestructionReceipt(String(jobId));
+
+    if (keyEntry?.state === "DESTROYED" || destructionReceipt) {
+      keyDestroyed = true;
+      expired = true;
+    }
+
+    if (job.status === "Completed" && !keyDestroyed) {
       const arkivData = await fetchFromArkiv(`job-${jobId}`).catch(() => null);
-      if (arkivData?.exists) {
-        result = arkivData.data;
-        const now = Math.floor(Date.now() / 1000);
-        expired = arkivData.expiresAt > 0 && arkivData.expiresAt < now;
-      } else {
+      if (arkivData?.exists && keyEntry?.state === "ACTIVE") {
+        try {
+          const payload: EncryptedPayload = JSON.parse(arkivData.data);
+          result = decrypt(payload, keyEntry.keyMaterial);
+        } catch {
+          result = null;
+        }
+      } else if (!arkivData?.exists) {
         expired = true;
       }
     }
@@ -45,6 +63,8 @@ export async function GET(
       attestationHash: job.attestationHash,
       result: expired ? null : result,
       expired,
+      keyDestroyed,
+      destructionReceipt: destructionReceipt ?? null,
       receipt: {
         jobId,
         txHash: null,

@@ -33,6 +33,10 @@ Thumbs.db
 *.swo
 *~
 
+# key store data (contains encryption keys — NEVER commit)
+.data/
+frontend/.data/
+
 # misc
 *.pem
 npm-debug.log*
