@@ -54,6 +54,16 @@ export async function POST(
     return fail(403, "Invalid access token");
   }
   if (row.status === "completed") return fail(409, "Job already completed");
+  // Only the enclave's own answer for this job may be signed. The hashes come from our record of /api/infer,
+  // never from the caller, so a client can't make the oracle attest something the enclave didn't say.
+  if (!row.inferred) return fail(409, "This job hasn't been read yet. Call /api/infer first");
+  if (
+    body.resultHash.toLowerCase() !== row.inferred.resultHash.toLowerCase() ||
+    body.attestationHash.toLowerCase() !== row.inferred.attestationHash.toLowerCase() ||
+    body.chatId !== row.inferred.chatId
+  ) {
+    return fail(403, "These hashes don't match the enclave's answer for this job");
+  }
 
   try {
     const onChainJob = await getJobOnChain(jobId);
