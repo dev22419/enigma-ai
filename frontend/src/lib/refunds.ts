@@ -14,15 +14,16 @@ export async function refundFailedJobs(now = Math.floor(Date.now() / 1000)): Pro
   const refunded: string[] = [];
   try {
     const { jobs } = await readStore();
-    const pending = Object.values(jobs).filter((j) => j.status === "failed" && !j.refund);
+    // A job whose browser went away mid-run stays "processing". Past its on-chain deadline it is refundable too.
+    const pending = Object.values(jobs).filter((j) => (j.status === "failed" || j.status === "processing") && !j.refund);
     for (const j of pending) {
       try {
         const chain = await getJobOnChain(Number(j.jobId));
         if (chain.status === "Refunded") {
           await record(j.jobId, { state: "REFUNDED", txHash: null, at: now });
         } else if (chain.status === "Completed") {
-          await record(j.jobId, { state: "NOT_REQUIRED", txHash: null, at: now });
-        } else if ((chain.status === "Pending" || chain.status === "Processing" || chain.status === "Failed") && now > chain.deadline) {
+          if (j.status === "failed") await record(j.jobId, { state: "NOT_REQUIRED", txHash: null, at: now });
+        } else if (chain.status === "Failed" || ((chain.status === "Pending" || chain.status === "Processing") && now > chain.deadline)) {
           const txHash = await refundJobOnChain(Number(j.jobId));
           await record(j.jobId, { state: "REFUNDED", txHash, at: now });
           refunded.push(j.jobId);
