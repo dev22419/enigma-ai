@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
+// AI-assisted: Used Claude for the job lifecycle phases and key-destruction receipt additions
 pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -14,13 +16,34 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 ///         oracle signer attests (EIP-712) that the TEE-verified result matches the job.
 ///         The contract does not verify TEE attestations on-chain: the backend verifies the 0G TEE
 ///         signature off-chain and a registered signer key vouches for (job, resultHash, attestationHash).
-contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
+///
+///         Lifecycle (see `phaseOf`): createJob locks the payment in the same transaction, so the
+///         product's CREATED and PAID steps are one on-chain step.
+///           Processing -> Completed -> Expired -> KeyDestroyed     (happy path)
+///           Processing -> Failed    -> Refunded                    (provider never answered)
+///         `Expired` and `Failed` are derived from time, not stored, so nobody has to pay gas to
+///         move a job into them. `KeyDestroyed` is recorded when the oracle signer attests, with an
+///         EIP-712 signature, that the job's encryption key was destroyed; this is the on-chain
+///         compliance receipt. The contract cannot observe key destruction itself: it trusts the
+///         registered signer for that fact, exactly as it does for the TEE-verified result.
+contract EnigmaAI is Ownable2Step, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
 
     enum Status {
         None,
         Pending,
         Completed,
+        Refunded
+    }
+
+    /// @notice Lifecycle view of a job. Derived from stored status, the clock and the destruction record.
+    enum Phase {
+        None,
+        Processing, // paid and locked, waiting for the oracle-attested result
+        Completed, // result delivered, provider paid, result still within its lifetime
+        Expired, // result lifetime elapsed; the key should be destroyed
+        KeyDestroyed, // a registered signer attested the key was destroyed
+        Failed, // never completed and past the deadline; refundJob is open
         Refunded
     }
 
@@ -37,8 +60,20 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         bytes32 attestationHash;
     }
 
+    /// @notice Oracle-signed record that a job's encryption key was destroyed.
+    struct Destruction {
+        bytes32 receiptHash; // hash of the backend's signed destruction receipt
+        uint64 destroyedAt; // when the key was destroyed, as attested by the signer
+        uint64 recordedAt; // block time the attestation was recorded on-chain
+        address signer;
+    }
+
     bytes32 public constant COMPLETE_TYPEHASH = keccak256(
         "Complete(uint256 jobId,address user,bytes32 fileHash,bytes32 resultHash,bytes32 attestationHash)"
+    );
+
+    bytes32 public constant DESTROY_TYPEHASH = keccak256(
+        "Destroy(uint256 jobId,address user,bytes32 resultHash,bytes32 receiptHash,uint64 destroyedAt)"
     );
 
     uint32 public constant MIN_EXPIRY = 1 minutes; // the 2-minute demo timer and the backend's 60s floor must fit
@@ -56,6 +91,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     uint256 public nextJobId = 1;
     mapping(address => uint256) public balances;
     mapping(uint256 => Job) private _jobs;
+    mapping(uint256 => Destruction) private _destructions;
     mapping(address => bool) public isSigner;
 
     event Deposited(address indexed user, uint256 amount);
@@ -72,6 +108,9 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         uint64 expiresAt
     );
     event JobRefunded(uint256 indexed jobId, address indexed user, uint256 amount);
+    event KeyDestroyed(
+        uint256 indexed jobId, address indexed user, bytes32 receiptHash, uint64 destroyedAt, address signer
+    );
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
     event ProviderUpdated(address indexed provider);
@@ -89,6 +128,8 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error UnauthorizedSigner();
     error SignerAlreadyRegistered();
     error SignerNotRegistered();
+    error AlreadyDestroyed();
+    error InvalidDestroyTime();
 
     constructor(IERC20 usdt_, address provider_, uint256 queryPrice_, uint64 jobTimeout_, address initialOwner)
         Ownable(initialOwner)
@@ -187,6 +228,51 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         job.status = Status.Refunded;
         balances[job.user] += job.payment;
         emit JobRefunded(jobId, job.user, job.payment);
+    }
+
+    /// @notice Record the oracle's attestation that a completed job's encryption key was destroyed.
+    ///         Callable by anyone (typically the backend relayer) with the oracle signature. One per job.
+    /// @param receiptHash hash of the backend's signed destruction receipt (kept off-chain)
+    /// @param destroyedAt unix time the key was destroyed; cannot be in the future
+    function recordKeyDestruction(uint256 jobId, bytes32 receiptHash, uint64 destroyedAt, bytes calldata signature)
+        external
+    {
+        Job storage job = _jobs[jobId];
+        if (job.status != Status.Completed) revert InvalidJobStatus();
+        if (_destructions[jobId].signer != address(0)) revert AlreadyDestroyed();
+        if (destroyedAt > block.timestamp) revert InvalidDestroyTime();
+
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(abi.encode(DESTROY_TYPEHASH, jobId, job.user, job.resultHash, receiptHash, destroyedAt))
+        );
+        address signer = ECDSA.recover(digest, signature);
+        if (!isSigner[signer]) revert UnauthorizedSigner();
+
+        _destructions[jobId] = Destruction({
+            receiptHash: receiptHash,
+            destroyedAt: destroyedAt,
+            recordedAt: uint64(block.timestamp),
+            signer: signer
+        });
+        emit KeyDestroyed(jobId, job.user, receiptHash, destroyedAt, signer);
+    }
+
+    /// @notice Where a job is in its lifecycle right now. See the contract-level notes for the mapping.
+    function phaseOf(uint256 jobId) public view returns (Phase) {
+        Job storage job = _jobs[jobId];
+        Status status = job.status;
+        if (status == Status.None) return Phase.None;
+        if (status == Status.Refunded) return Phase.Refunded;
+        if (status == Status.Pending) {
+            return block.timestamp > job.deadline ? Phase.Failed : Phase.Processing;
+        }
+        if (_destructions[jobId].signer != address(0)) return Phase.KeyDestroyed;
+        if (block.timestamp >= uint256(job.completedAt) + job.expirySeconds) return Phase.Expired;
+        return Phase.Completed;
+    }
+
+    function getDestruction(uint256 jobId) external view returns (Destruction memory) {
+        return _destructions[jobId];
     }
 
     function getJob(uint256 jobId) external view returns (Job memory) {
