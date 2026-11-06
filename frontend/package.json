@@ -19,14 +19,17 @@
     "clsx": "^2.1.1",
     "ethers": "^6.17.0",
     "lucide-react": "^1.69.0",
+    "mammoth": "^1.13.0",
     "motion": "^14.9.1",
     "next": "16.4.5",
+    "pdfjs-dist": "^6.5.438",
     "radix-ui": "^1.8.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "^3.7.0",
     "viem": "^2.57.16",
-    "wagmi": "^3.7.11"
+    "wagmi": "^3.7.11",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -35,6 +38,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "fake-indexeddb": "^6.2.7",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",

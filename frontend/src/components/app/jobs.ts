@@ -155,8 +155,8 @@ export function patchEntry(id: string, patch: Partial<IndexEntry>) {
 }
 
 /** Clears the job list. Keys go first, so nothing readable outlives the list that points to it. */
-export function forgetAll() {
-  wipeAllKeys();
+export async function forgetAll() {
+  await wipeAllKeys();
   saveIndex([]);
 }
 
@@ -380,12 +380,12 @@ export async function runJob(
       { encryptedResult, resultHash: inf.resultHash, attestationHash: inf.attestationHash, chatId: inf.chatId },
       created.accessToken,
     );
-    setKeyExpiry(jobId, stored.expiresAt);
+    await setKeyExpiry(jobId, stored.expiresAt);
     fresh.set(jobId, inf.result);
     return { jobId, expiresAt: stored.expiresAt * 1000, result: inf.result };
   } catch (e) {
     // The job is open on-chain but won't complete: drop the key, and the contract refunds after its timeout.
-    wipeKey(jobId, Math.floor(Date.now() / 1000));
+    await wipeKey(jobId, Math.floor(Date.now() / 1000));
     const err = e instanceof ApiError ? e : new ApiError(String(e), 0);
     throw new ApiError(err.message, err.status, { ...err.body, jobId, refund: "after the contract's timeout" });
   }
@@ -735,11 +735,11 @@ export async function tryDecrypt(id: string): Promise<{ ok: true } | { ok: false
  * from storage, so a key is wiped even if its job is missing from the list. Arkiv's expiry, when
  * known on the list, also counts.
  */
-export function wipeExpired(all: IndexEntry[], now: number) {
-  let wiped = wipeExpiredKeys(Math.floor(now / 1000));
+export async function wipeExpired(all: IndexEntry[], now: number) {
+  let wiped = await wipeExpiredKeys(Math.floor(now / 1000));
   for (const e of all) {
     if (e.preview || !e.expiresAt || now < e.expiresAt) continue;
-    if (hasKey(e.id) && wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
+    if (hasKey(e.id) && await wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
   }
   anchorPendingWipes(all);
   return wiped;

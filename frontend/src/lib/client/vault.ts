@@ -9,13 +9,96 @@ import { ethers } from "ethers";
  * - One AES-256-GCM key per job, generated here with Web Crypto. The server never sees it.
  * - The document and the answer are each encrypted with that key under a fresh 96-bit IV,
  *   with associated data that binds the ciphertext to what it is (input vs result, which job).
- * - The key lives in sessionStorage (so a refresh can still read the answer) and nowhere else.
- * - At expiry the key is wiped, and a destruction receipt without any key material is kept.
+ * - Keys are NON-EXTRACTABLE CryptoKey objects stored in IndexedDB — JS can use them
+ *   for encrypt/decrypt but can never read the raw key bytes, even under XSS.
+ * - At expiry the key is deleted from IndexedDB, and a destruction receipt is kept in localStorage.
  */
 
-const KEY_PREFIX = "enigma.key.";
+const DB_NAME = "enigma-vault";
+const DB_VERSION = 1;
+const KEY_STORE = "keys";
+
 const TOKEN_PREFIX = "enigma.token.";
 const RECEIPT_PREFIX = "enigma.wiped.";
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(KEY_STORE)) {
+          db.createObjectStore(KEY_STORE, { keyPath: "jobId" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+function idbGet<T>(db: IDBDatabase, store: string, id: string): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readonly");
+    const req = tx.objectStore(store).get(id);
+    req.onsuccess = () => resolve(req.result as T | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbPut(db: IDBDatabase, store: string, value: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    const req = tx.objectStore(store).put(value);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbDelete(db: IDBDatabase, store: string, id: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    const req = tx.objectStore(store).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbAllKeys(db: IDBDatabase, store: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readonly");
+    const req = tx.objectStore(store).getAllKeys();
+    req.onsuccess = () => resolve(req.result as string[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+interface KeyRecord {
+  jobId: string;
+  key: CryptoKey;
+  keyId: string;
+  expiresAt: number;
+}
+
+/** Sync cache of held job IDs so render-path code can check without await. */
+const heldKeys = new Set<string>();
+let cacheReady = false;
+
+/** Populates the sync cache from IndexedDB. Call once on app mount. */
+export async function initVault() {
+  if (cacheReady) return;
+  try {
+    const db = await openDB();
+    const ids = await idbAllKeys(db, KEY_STORE);
+    for (const id of ids) heldKeys.add(id);
+    db.close();
+    cacheReady = true;
+  } catch {
+    /* IndexedDB unavailable — cache stays empty, fail closed */
+  }
+}
 
 export interface Envelope {
   v: 1;
@@ -70,7 +153,7 @@ export function hashText(content: string) {
 }
 
 export async function newJobKey() {
-  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   return { key, keyId: `k_${randomId()}` };
 }
 
@@ -101,7 +184,7 @@ export async function decryptEnvelope(key: CryptoKey, json: string, expect: Reco
   return dec.decode(pt);
 }
 
-// ------------------------------------------------------------------ session storage
+// ------------------------------------------------------------------ IndexedDB key storage
 
 function session(): Storage | null {
   try {
@@ -111,80 +194,90 @@ function session(): Storage | null {
   }
 }
 
-/** Stores the key with the time it must be gone by (seconds). The wiper uses this, not the job list. */
+/** Stores a non-extractable CryptoKey in IndexedDB with its expiry deadline. */
 export async function storeKey(jobId: string, key: CryptoKey, keyId: string, expiresAt: number) {
-  const jwk = await crypto.subtle.exportKey("jwk", key);
-  session()?.setItem(KEY_PREFIX + jobId, JSON.stringify({ keyId, jwk, expiresAt }));
+  const db = await openDB();
+  await idbPut(db, KEY_STORE, { jobId, key, keyId, expiresAt } satisfies KeyRecord);
+  db.close();
+  heldKeys.add(jobId);
 }
 
-/** Moves a key's deadline to the real one once Arkiv reports it. Never extends past what's stored if later. */
-export function setKeyExpiry(jobId: string, expiresAt: number) {
-  const s = session();
-  const raw = s?.getItem(KEY_PREFIX + jobId);
-  if (!raw) return;
+/** Moves a key's deadline to the real one once Arkiv reports it. */
+export async function setKeyExpiry(jobId: string, expiresAt: number) {
   try {
-    const row = JSON.parse(raw) as { keyId: string; jwk: JsonWebKey; expiresAt?: number };
-    s?.setItem(KEY_PREFIX + jobId, JSON.stringify({ ...row, expiresAt }));
+    const db = await openDB();
+    const row = await idbGet<KeyRecord>(db, KEY_STORE, jobId);
+    if (row) {
+      await idbPut(db, KEY_STORE, { ...row, expiresAt });
+    }
+    db.close();
   } catch {
     /* unreadable row: leave it for the wiper */
   }
 }
 
-/** The job's key, if this browser session still holds it. */
+/** The job's key, if this browser still holds it. Fail-closed: expired keys are wiped on sight. */
 export async function loadKey(jobId: string): Promise<{ key: CryptoKey; keyId: string } | null> {
-  const raw = session()?.getItem(KEY_PREFIX + jobId);
-  if (!raw) return null;
   try {
-    const { keyId, jwk, expiresAt } = JSON.parse(raw) as { keyId: string; jwk: JsonWebKey; expiresAt?: number };
-    // Fail closed: a key past its deadline is wiped on sight, never used.
-    if (!expiresAt || Date.now() / 1000 >= expiresAt) {
-      wipeKey(jobId, expiresAt ?? Math.floor(Date.now() / 1000));
+    const db = await openDB();
+    const row = await idbGet<KeyRecord>(db, KEY_STORE, jobId);
+    db.close();
+    if (!row) return null;
+    if (!row.expiresAt || Date.now() / 1000 >= row.expiresAt) {
+      await wipeKey(jobId, row.expiresAt ?? Math.floor(Date.now() / 1000));
       return null;
     }
-    const key = await crypto.subtle.importKey("jwk", jwk, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
-    return { key, keyId };
+    return { key: row.key, keyId: row.keyId };
   } catch {
     return null;
   }
 }
 
-/** Every job id whose key this session holds, read from storage itself (not from the job list). */
-function heldJobIds(): string[] {
-  const s = session();
-  if (!s) return [];
-  const ids: string[] = [];
-  for (let i = 0; i < s.length; i++) {
-    const k = s.key(i);
-    if (k?.startsWith(KEY_PREFIX)) ids.push(k.slice(KEY_PREFIX.length));
+/** Every job id whose key this browser holds. */
+async function heldJobIds(): Promise<string[]> {
+  try {
+    const db = await openDB();
+    const keys = await idbAllKeys(db, KEY_STORE);
+    db.close();
+    return keys;
+  } catch {
+    return [];
   }
-  return ids;
 }
 
-/** Wipes every key whose deadline has passed, or that has no readable deadline (task #74, fail closed). */
-export function wipeExpiredKeys(nowSec = Math.floor(Date.now() / 1000)) {
+/** Wipes every key whose deadline has passed, or that has no readable deadline (fail closed). */
+export async function wipeExpiredKeys(nowSec = Math.floor(Date.now() / 1000)) {
   let wiped = 0;
-  for (const id of heldJobIds()) {
-    let exp: number | undefined;
-    try {
-      exp = (JSON.parse(session()?.getItem(KEY_PREFIX + id) ?? "{}") as { expiresAt?: number }).expiresAt;
-    } catch {
-      exp = undefined;
+  try {
+    const db = await openDB();
+    const ids = await idbAllKeys(db, KEY_STORE);
+    for (const id of ids) {
+      const row = await idbGet<KeyRecord>(db, KEY_STORE, id);
+      if (!row || !row.expiresAt || nowSec >= row.expiresAt) {
+        await idbDelete(db, KEY_STORE, id);
+        heldKeys.delete(id);
+        const exp = row?.expiresAt ?? nowSec;
+        const keyId = row?.keyId ?? "unknown";
+        saveWipeReceipt(id, keyId, exp);
+        wiped++;
+      }
     }
-    if (!exp || nowSec >= exp) {
-      if (wipeKey(id, exp ?? nowSec)) wiped++;
-    }
+    db.close();
+  } catch {
+    /* best-effort sweep */
   }
   return wiped;
 }
 
-/** Wipes every key in this session, e.g. when the user clears their job list. */
-export function wipeAllKeys() {
+/** Wipes every key in this browser, e.g. when the user clears their job list. */
+export async function wipeAllKeys() {
   const nowSec = Math.floor(Date.now() / 1000);
-  for (const id of heldJobIds()) wipeKey(id, nowSec);
+  for (const id of await heldJobIds()) await wipeKey(id, nowSec);
 }
 
+/** Sync check using the in-memory cache. Call initVault() on app mount to populate. */
 export function hasKey(jobId: string) {
-  return !!session()?.getItem(KEY_PREFIX + jobId);
+  return heldKeys.has(jobId);
 }
 
 export function storeToken(jobId: string, token: string) {
@@ -197,23 +290,7 @@ export function loadToken(jobId: string) {
 
 // ------------------------------------------------------------------ destruction
 
-/**
- * Wipes the job's key from this browser and keeps a receipt of it (no key material).
- * Idempotent: a second call returns the first receipt.
- */
-export function wipeKey(jobId: string, expiryTimestamp: number): WipeReceipt | null {
-  const existing = loadWipeReceipt(jobId);
-  if (existing) return existing;
-  const s = session();
-  const raw = s?.getItem(KEY_PREFIX + jobId);
-  if (!raw) return null;
-  let keyId = "unknown";
-  try {
-    keyId = (JSON.parse(raw) as { keyId: string }).keyId;
-  } catch {
-    /* keep going: the wipe matters more than the id */
-  }
-  s?.removeItem(KEY_PREFIX + jobId);
+function saveWipeReceipt(jobId: string, keyId: string, expiryTimestamp: number): WipeReceipt {
   const base = { jobId, keyId, expiryTimestamp, destructionTimestamp: Math.floor(Date.now() / 1000), status: "wiped" as const };
   const receipt: WipeReceipt = { ...base, receiptHash: hashText(JSON.stringify([base.jobId, base.keyId, base.expiryTimestamp, base.destructionTimestamp, base.status])) };
   try {
@@ -222,6 +299,26 @@ export function wipeKey(jobId: string, expiryTimestamp: number): WipeReceipt | n
     /* the key is gone either way */
   }
   return receipt;
+}
+
+/**
+ * Wipes the job's key from IndexedDB and keeps a receipt in localStorage.
+ * Idempotent: a second call returns the first receipt.
+ */
+export async function wipeKey(jobId: string, expiryTimestamp: number): Promise<WipeReceipt | null> {
+  const existing = loadWipeReceipt(jobId);
+  if (existing) return existing;
+  try {
+    const db = await openDB();
+    const row = await idbGet<KeyRecord>(db, KEY_STORE, jobId);
+    if (!row) { db.close(); return null; }
+    await idbDelete(db, KEY_STORE, jobId);
+    db.close();
+    heldKeys.delete(jobId);
+    return saveWipeReceipt(jobId, row.keyId ?? "unknown", expiryTimestamp);
+  } catch {
+    return null;
+  }
 }
 
 export function loadWipeReceipt(jobId: string): WipeReceipt | null {
