@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Light waves: wide plates of glass pouring out of the letters of the wordmark toward the viewer.
+ * Light waves: wide plates of glass pouring out from under the wordmark toward the viewer.
  *
  * The fan starts exactly as wide as the title (measured from the DOM, so it follows any font or
  * screen), with a shaft of light under each letter. From there the plates bell outward. Each plate
@@ -141,14 +141,10 @@ void main() {
   rib += warm * 1.1 * exp(-u * u * 10.0) * exp(-dd * 3.0);
 
   float inFan = 1.0 - smoothstep(0.975, 1.0, abs(u));
-  float below = smoothstep(0.0, 0.006, d);
+  float below = smoothstep(0.0, 0.11, d);                           // no hard top edge under the word
   float r = 1.4 * (1.0 - pow(1.0 - intro, 2.4));
   float emerge = 1.0 - smoothstep(r - 0.35, r, d);                  // light pours out of the letters
   vec3 col = mix(bg, rib, inFan * below * emerge);
-
-  // The line the letters sit on, exactly the width of the title
-  float cut = exp(-pow(c.y * 72.0, 2.0)) * (1.0 - smoothstep(0.88, 1.0, abs(u)));
-  col += warm * 0.9 * cut * smoothstep(0.0, 0.4, intro);
 
   col *= 1.0 - 0.55 * uDive;
 
@@ -267,7 +263,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       const visible = Math.max(title.offsetWidth - 2 * pad, 10);
       const cx = o.x + title.offsetWidth / 2;
       anchor.x = cx / W;
-      anchor.y = 1 - (o.y + title.offsetHeight * 0.82) / H; // letters overlap the top of the plates
+      anchor.y = 1 - (o.y + title.offsetHeight + fs * 0.2) / H; // the plates start below the word, descender included
       anchor.half = visible / 2 / H;
       letterEls.slice(0, LETTERS).forEach((el, i) => {
         const lo = offsetIn(el, parent);
