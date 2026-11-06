@@ -154,6 +154,7 @@ export function patchEntry(id: string, patch: Partial<IndexEntry>) {
 /** Clears the job list. Keys go first, so nothing readable outlives the list that points to it. */
 export async function forgetAll() {
   await wipeAllKeys();
+  for (const e of loadIndex()) fresh.delete(e.id);
   saveIndex([]);
 }
 
@@ -227,8 +228,29 @@ export interface DirectTeeConfig {
   provider: TeeProvider;
 }
 
-/** Answers decrypted (or received) in this tab, so they show without a round trip. Memory only. */
-const fresh = new Map<string, string>();
+const PLAIN_PREFIX = "enigma.plain.";
+
+/** Answers decrypted (or received) in this tab, backed by sessionStorage so a refresh keeps them. */
+const fresh = {
+  _mem: new Map<string, string>(),
+  get(id: string) {
+    const m = this._mem.get(id);
+    if (m !== undefined) return m;
+    try {
+      const s = sessionStorage.getItem(PLAIN_PREFIX + id);
+      if (s !== null) { this._mem.set(id, s); return s; }
+    } catch { /* private mode / no storage */ }
+    return undefined;
+  },
+  set(id: string, text: string) {
+    this._mem.set(id, text);
+    try { sessionStorage.setItem(PLAIN_PREFIX + id, text); } catch { /* best effort */ }
+  },
+  delete(id: string) {
+    this._mem.delete(id);
+    try { sessionStorage.removeItem(PLAIN_PREFIX + id); } catch { /* best effort */ }
+  },
+};
 
 function post<T>(url: string, body: unknown, token?: string) {
   return call<T>(url, {
@@ -381,6 +403,7 @@ export async function runJob(
   } catch (e) {
     // The job is open on-chain but won't complete: drop the key, and the contract refunds after its timeout.
     await wipeKey(jobId, Math.floor(Date.now() / 1000));
+    fresh.delete(jobId);
     const err = e instanceof ApiError ? e : new ApiError(String(e), 0);
     throw new ApiError(err.message, err.status, { ...err.body, jobId, refund: "after the contract's timeout" });
   }
@@ -725,7 +748,14 @@ export async function wipeExpired(all: IndexEntry[], now: number) {
   let wiped = await wipeExpiredKeys(Math.floor(now / 1000));
   for (const e of all) {
     if (e.preview || !e.expiresAt || now < e.expiresAt) continue;
-    if (hasKey(e.id) && await wipeKey(e.id, Math.floor(e.expiresAt / 1000))) wiped++;
+    if (hasKey(e.id) && await wipeKey(e.id, Math.floor(e.expiresAt / 1000))) {
+      fresh.delete(e.id);
+      wiped++;
+    }
+  }
+  // Also clear any cached plaintext for jobs whose keys were wiped by wipeExpiredKeys above.
+  for (const e of all) {
+    if (loadWipeReceipt(e.id)) fresh.delete(e.id);
   }
   anchorPendingWipes(all);
   return wiped;
