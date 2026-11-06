@@ -9,7 +9,14 @@ import { Suspense, useEffect, type ReactNode } from "react";
 import { Logo } from "@/components/landing/site-nav";
 import { cn } from "@/lib/utils";
 import { countdown, localPhase, threadsOf, useIndex, useNow, wipeExpired, type Thread } from "./jobs";
+import { initVault } from "@/lib/client/vault";
 import { WalletBox } from "./wallet";
+
+/** Populates the sync key-cache from IndexedDB on first mount. */
+function VaultInit() {
+  useEffect(() => { initVault(); }, []);
+  return null;
+}
 
 /** Wipes each job's key from this browser the moment its lifespan ends (task #74). */
 function KeyWiper() {
@@ -26,6 +33,7 @@ function KeyWiper() {
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
+    <VaultInit />
     <KeyWiper />
     <div className="flex min-h-dvh flex-col bg-night text-frost lg:flex-row">
       <Suspense fallback={<aside className="shrink-0 lg:w-[16rem]" />}>
