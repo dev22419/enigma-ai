@@ -1,7 +1,7 @@
 // AI-assisted: Used Claude to write this file.
 import type { Metadata } from "next";
 
-import { cinzel, geist, plexMono, plexSans } from "@/lib/fonts";
+import { geist, plexMono, plexSans } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} ${geist.variable} ${cinzel.variable}`}>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} ${geist.variable}`}>
       <body className="min-h-dvh" suppressHydrationWarning>
         {children}
       </body>

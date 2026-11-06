@@ -117,7 +117,7 @@ function Sidebar() {
                       {live?.expiresAt ? (
                         <span className="shrink-0 font-mono text-[10.5px] text-volt-lit/80">{countdown(live.expiresAt - now)}</span>
                       ) : allGone ? (
-                        <span className="size-1 shrink-0 rounded-full bg-melon/60" title="All answers destroyed" />
+                        <span className="size-1 shrink-0 rounded-full bg-orchid/60" title="All answers destroyed" />
                       ) : null}
                     </Link>
                   </li>

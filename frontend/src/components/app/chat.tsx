@@ -213,7 +213,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
         <header className="flex h-12 shrink-0 items-center gap-3 px-5 sm:px-8">
           <p className="min-w-0 truncate text-[14px] text-frost/70">{jobs[0]?.fileName ?? pending[0]?.out.label ?? ""}</p>
           {threadPreview && (
-            <span className="shrink-0 text-[12px] text-melon" title="The server isn't configured, so answers are simulated in this browser">
+            <span className="shrink-0 text-[12px] text-orchid" title="The server isn't configured, so answers are simulated in this browser">
               Preview
             </span>
           )}
@@ -427,7 +427,7 @@ function Composer({
               disabled={!canSend}
               aria-label="Send"
               className={cn(
-                "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-melon disabled:bg-frost/15 disabled:text-frost/40",
+                "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
                 !(gate.kind === "ok" && gate.price) && "ml-auto",
               )}
             >
@@ -447,20 +447,20 @@ function Composer({
         />
       </div>
       {err && (
-        <p role="alert" className="mt-2 px-1 text-[13px] text-melon">
+        <p role="alert" className="mt-2 px-1 text-[13px] text-orchid">
           {err}
         </p>
       )}
       {gate.kind === "credit" && (
-        <p className="mt-2 px-1 text-[13px] text-melon">
+        <p className="mt-2 px-1 text-[13px] text-orchid">
           Your credit is {Number(gate.balance).toFixed(2)} USDT and a message costs {gate.price}.{" "}
-          <Link href="/dashboard" className="underline decoration-melon/40 underline-offset-4">
+          <Link href="/dashboard" className="underline decoration-orchid/40 underline-offset-4">
             Add credit
           </Link>
         </p>
       )}
       {gate.kind === "checking" && <p className="mt-2 px-1 text-[13px] text-frost-soft/70">Checking your credit…</p>}
-      {gate.kind === "error" && <p className="mt-2 px-1 text-[13px] text-melon">Couldn&rsquo;t read your credit: {gate.message}</p>}
+      {gate.kind === "error" && <p className="mt-2 px-1 text-[13px] text-orchid">Couldn&rsquo;t read your credit: {gate.message}</p>}
       {gate.kind === "connect" && roomy && <p className="mt-2 px-1 text-[13px] text-frost-soft/70">Connect a wallet to send. Each message is paid from your prepaid USDT balance.</p>}
     </div>
   );
@@ -536,12 +536,12 @@ function Reply({ id }: { id: string }) {
           {/* The fuse: one line down the answer, burning away as the key's lifespan runs out */}
           <span className="absolute top-1 bottom-1 left-0 w-px bg-frost/10" aria-hidden="true" />
           <span
-            className={cn("absolute top-1 left-0 w-px origin-top transition-transform duration-300", late ? "bg-melon" : "bg-volt-lit")}
+            className={cn("absolute top-1 left-0 w-px origin-top transition-transform duration-300", late ? "bg-orchid" : "bg-volt-lit")}
             style={{ height: "calc(100% - 0.5rem)", transform: `scaleY(${frac})` }}
             aria-hidden="true"
           />
           <span
-            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-melon shadow-[0_0_10px_#fc734d]" : "bg-volt-lit shadow-[0_0_10px_#5cc4ff]")}
+            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-orchid shadow-[0_0_10px_#e59cf4]" : "bg-volt-lit shadow-[0_0_10px_#5cc4ff]")}
             style={{ top: `calc(0.25rem + (100% - 0.5rem) * ${frac})` }}
             aria-hidden="true"
           />
@@ -565,7 +565,7 @@ function Reply({ id }: { id: string }) {
             ))}
           </div>
           <Meta>
-            <span className={late ? "text-melon" : "text-frost/80"}>Key wiped in {countdown(left)}</span>
+            <span className={late ? "text-orchid" : "text-frost/80"}>Key wiped in {countdown(left)}</span>
             {vm.attestationHash && <span>Attested in TDX</span>}
             <button
               onClick={() =>
@@ -587,10 +587,10 @@ function Reply({ id }: { id: string }) {
 
       {gone && (
         <div className="relative pl-5">
-          <span className="absolute top-1 bottom-1 left-0 w-px bg-melon/40" aria-hidden="true" />
+          <span className="absolute top-1 bottom-1 left-0 w-px bg-orchid/40" aria-hidden="true" />
           <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
           <Meta>
-            <span className="text-melon">
+            <span className="text-orchid">
               Key wiped{vm.destruction ? ` at ${new Date(vm.destruction.destructionTimestamp * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}. Nobody can read this again.
             </span>
             <Link href={`/job/${vm.id}`} className="hover:text-frost">
@@ -611,7 +611,7 @@ function Reply({ id }: { id: string }) {
       )}
 
       {(vm.phase === "failed" || vm.phase === "refunded" || vm.phase === "missing") && (
-        <p className="border-l border-melon/50 pl-5 text-[14px] text-frost/80">
+        <p className="border-l border-orchid/50 pl-5 text-[14px] text-frost/80">
           {vm.phase === "refunded" ? "This job failed after payment and was refunded." : vm.phase === "missing" ? "This job isn't on-chain." : "This job never completed. The contract refunds it after its timeout."}
         </p>
       )}
@@ -656,7 +656,7 @@ function PendingTurn({ p, onRetry, onPreview }: { p: Pending; onRetry: () => voi
         {!p.error ? (
           <Working started={p.started} stage={p.stage} />
         ) : (
-          <div role="alert" className="border-l border-melon/60 pl-5">
+          <div role="alert" className="border-l border-orchid/60 pl-5">
             <p className="text-[15px] text-frost">{p.error.notConfigured ? "The server isn't set up to run jobs yet." : "This message didn't go through."}</p>
             <p className="mt-1.5 font-mono text-[12px] leading-relaxed break-words text-frost/45">{p.error.message}</p>
             {refund && <p className="mt-2 text-[13.5px] text-frost/70">Job {String(p.error.body.jobId)} was opened but couldn&rsquo;t finish, so this browser wiped its key. The payment comes back after the contract&rsquo;s timeout.</p>}

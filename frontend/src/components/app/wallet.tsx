@@ -84,7 +84,7 @@ export function ConnectPill({ className }: { className?: string }) {
         <button
           onClick={openConnectModal}
           disabled={!mounted}
-          className={cn("rounded-full bg-melon px-4 py-2 text-[13px] font-semibold text-night transition-colors hover:bg-melon-lit disabled:opacity-40", className)}
+          className={cn("rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night transition-colors hover:bg-white disabled:opacity-40", className)}
         >
           Connect wallet
         </button>
@@ -112,7 +112,7 @@ export function WalletBox() {
       <div className="px-2 pt-2 max-lg:hidden">
         <ConnectButton.Custom>
           {({ openConnectModal, mounted: ready }) => (
-            <button onClick={openConnectModal} disabled={!ready} className="text-[13.5px] text-frost/80 underline decoration-frost/20 underline-offset-4 transition-colors hover:text-frost hover:decoration-melon disabled:opacity-40">
+            <button onClick={openConnectModal} disabled={!ready} className="text-[13.5px] text-frost/80 underline decoration-frost/20 underline-offset-4 transition-colors hover:text-frost hover:decoration-orchid disabled:opacity-40">
               Connect wallet
             </button>
           )}
@@ -127,7 +127,7 @@ export function WalletBox() {
         {({ openAccountModal, openConnectModal }) => (
           <>
             <button onClick={openAccountModal} className="flex w-full items-center gap-2 text-left text-[13px] text-frost/85 transition-colors hover:text-frost">
-              <span className={cn("size-1.5 rounded-full", chainId === CHAIN_ID ? "bg-volt-lit shadow-[0_0_8px_#5cc4ff]" : "bg-melon")} />
+              <span className={cn("size-1.5 rounded-full", chainId === CHAIN_ID ? "bg-volt-lit shadow-[0_0_8px_#5cc4ff]" : "bg-orchid")} />
               <span className="font-mono text-[12px]">{short(address, 6, 4)}</span>
             </button>
             <p className="mt-1 flex gap-3 text-[12px] text-frost-soft/70">
@@ -148,7 +148,7 @@ export function WalletBox() {
           </>
         )}
       </ConnectButton.Custom>
-      {chainId !== CHAIN_ID && <p className="mt-1 text-[12px] text-melon">Switch to Whitechain to add credit.</p>}
+      {chainId !== CHAIN_ID && <p className="mt-1 text-[12px] text-orchid">Switch to Whitechain to add credit.</p>}
       <p className="mt-1 text-[12px] text-frost-soft/70">
         Credit: <span className="num text-frost/85">{credit.balance !== null ? `${Number(credit.balance).toFixed(2)} USDT` : "…"}</span>{" "}
         <Link href="/dashboard" className="underline decoration-frost/20 underline-offset-4 hover:text-frost">
@@ -251,19 +251,19 @@ export function DepositFlow() {
       </ol>
 
       {noGas && (
-        <p className="mt-3 max-w-[36rem] text-[13px] text-melon">This wallet has no WBT for network fees. Get a little test WBT from the Whitechain testnet faucet, then come back.</p>
+        <p className="mt-3 max-w-[36rem] text-[13px] text-orchid">This wallet has no WBT for network fees. Get a little test WBT from the Whitechain testnet faucet, then come back.</p>
       )}
 
       <div className="mt-4">
         {chainId !== CHAIN_ID ? (
-          <button onClick={() => switchChain({ chainId: CHAIN_ID })} disabled={switching} className="rounded-full bg-melon px-4 py-2 text-[13px] font-semibold text-night hover:bg-melon-lit disabled:opacity-50">
+          <button onClick={() => switchChain({ chainId: CHAIN_ID })} disabled={switching} className="rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night hover:bg-white disabled:opacity-50">
             Switch to Whitechain
           </button>
         ) : step <= 1 ? (
           <button
             disabled={busy || value === BigInt(0)}
             onClick={() => send("mint", { address: USDT_ADDRESS, abi: usdtAbi, functionName: "mint", args: [address, FAUCET], chainId: CHAIN_ID })}
-            className="rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night hover:bg-melon disabled:opacity-40"
+            className="rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night hover:bg-white disabled:opacity-40"
           >
             {busy ? "Confirming…" : "Get 100 test USDT"}
           </button>
@@ -271,7 +271,7 @@ export function DepositFlow() {
           <button
             disabled={busy}
             onClick={() => send("approve", { address: USDT_ADDRESS, abi: usdtAbi, functionName: "approve", args: [ENIGMA_ADDRESS, value], chainId: CHAIN_ID })}
-            className="rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night hover:bg-melon disabled:opacity-40"
+            className="rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night hover:bg-white disabled:opacity-40"
           >
             {busy ? "Confirming…" : `Approve ${amount} USDT`}
           </button>
@@ -279,7 +279,7 @@ export function DepositFlow() {
           <button
             disabled={busy}
             onClick={() => send("deposit", { address: ENIGMA_ADDRESS, abi: enigmaAbi, functionName: "deposit", args: [value], chainId: CHAIN_ID })}
-            className="rounded-full bg-melon px-4 py-2 text-[13px] font-semibold text-night hover:bg-melon-lit disabled:opacity-40"
+            className="rounded-full bg-frost px-4 py-2 text-[13px] font-semibold text-night hover:bg-white disabled:opacity-40"
           >
             {busy ? "Confirming…" : `Deposit ${amount} USDT`}
           </button>
@@ -287,12 +287,12 @@ export function DepositFlow() {
       </div>
 
       {write.error && (
-        <p role="alert" className="mt-3 text-[13px] text-melon">
+        <p role="alert" className="mt-3 text-[13px] text-orchid">
           {oneLine(write.error.message)}
         </p>
       )}
       {receipt.isError && (
-        <p role="alert" className="mt-3 text-[13px] text-melon">
+        <p role="alert" className="mt-3 text-[13px] text-orchid">
           The transaction failed on-chain.
         </p>
       )}

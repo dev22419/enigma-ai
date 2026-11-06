@@ -62,7 +62,7 @@ export function SiteFooter() {
         label="Enigma"
         meta="Built at ETHGlobal Mumbai 2026. Testnets only."
         columns={COLUMNS}
-        palette={{ background: "#02070a", ink: "#cfe4f2", warm: "#fc734d" }}
+        palette={{ background: "#02070a", ink: "#cfe4f2", warm: "#e59cf4" }}
         fontFamily={plexSans.style.fontFamily}
         fontWeight={700}
         monoFamily={plexMono.style.fontFamily}

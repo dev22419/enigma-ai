@@ -54,7 +54,7 @@ export function JobConsole({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[10px] border border-white/10 bg-night/85 text-frost shadow-[0_0_0_1px_rgb(2_7_10/0.6),0_40px_120px_-30px_rgb(2_151_222/0.45)] backdrop-blur-md",
+        "relative overflow-hidden rounded-[10px] border border-white/10 bg-night/85 text-frost shadow-[0_0_0_1px_rgb(0_0_0/0.6)] backdrop-blur-md",
         className,
       )}
       onMouseEnter={() => setPaused(true)}
@@ -95,7 +95,7 @@ export function JobConsole({ className }: { className?: string }) {
             <span
               className={cn(
                 "absolute inset-x-0 top-0 h-[2px] origin-left",
-                st.key === "destroyed" ? "bg-melon" : "bg-volt",
+                st.key === "destroyed" ? "bg-orchid" : "bg-volt",
                 i < stage ? "scale-x-100" : "scale-x-0",
               )}
               style={
@@ -119,7 +119,7 @@ function StatusChip({ stage }: { stage: string }) {
     encrypt: ["Encrypting", "text-frost border-frost/30"],
     enclave: ["In enclave", "text-volt-lit border-volt/50"],
     answer: ["Readable", "text-volt-lit border-volt/50"],
-    destroyed: ["Key destroyed", "text-melon border-melon/60"],
+    destroyed: ["Key destroyed", "text-orchid border-orchid/60"],
   };
   const [label, cls] = map[stage];
   return (
@@ -244,12 +244,12 @@ function Answer({ ms, still }: { ms: number; still: boolean }) {
       <div className="mt-auto">
         <div className="flex items-end justify-between">
           <span className="font-mono text-[11px] text-frost-soft">key destroyed in</span>
-          <span className={cn("display num text-[2.6rem] leading-none tracking-[-0.02em]", late ? "text-melon" : "text-frost")}>
+          <span className={cn("display num text-[2.6rem] leading-none tracking-[-0.02em]", late ? "text-orchid" : "text-frost")}>
             00:{String(Math.ceil(left)).padStart(2, "0")}
           </span>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-frost/10">
-          <div className={cn("h-full origin-left transition-colors", late ? "bg-melon" : "bg-volt")} style={{ transform: `scaleX(${frac})` }} />
+          <div className={cn("h-full origin-left transition-colors", late ? "bg-orchid" : "bg-volt")} style={{ transform: `scaleX(${frac})` }} />
         </div>
       </div>
     </div>
@@ -264,7 +264,7 @@ function Destroyed() {
         <p className="truncate">0e7c25b8f1a4c09d3b7251aa3c8e2b9f04d7e61a9d30e7c2</p>
         <p className="truncate">5d9b0c3f7a61b28d5e0f17a4c9b3e62d07f6c4118a2e4f70</p>
       </div>
-      <div className="stamp-in pointer-events-none absolute top-5 right-2 rounded-[6px] border-[3px] border-melon px-3 py-1 text-melon sm:right-6">
+      <div className="stamp-in pointer-events-none absolute top-5 right-2 rounded-[6px] border-[3px] border-orchid px-3 py-1 text-orchid sm:right-6">
         <span className="display narrow block text-[2rem] leading-none tracking-[0.02em]">DESTROYED</span>
         <span className="block text-center font-mono text-[9.5px] tracking-[0.2em]">KEY GONE, DATA UNREADABLE</span>
       </div>

@@ -4,14 +4,14 @@
 import { cn } from "@/lib/utils";
 import type { Phase } from "./jobs";
 
-/** Lifespan bar: electric blue while there is time, cantaloupe in the last 30%. */
+/** Lifespan bar: electric blue while there is time, orchid in the last 30%. */
 export function Fuse({ frac, className, burning }: { frac: number; className?: string; burning?: boolean }) {
   const f = Math.max(0, Math.min(1, frac));
   const late = f > 0 && f < 0.3;
   return (
     <div className={cn("relative h-1.5 rounded-full bg-frost/10", className)}>
       <div
-        className={cn("absolute inset-y-0 left-0 w-full origin-left rounded-full transition-colors duration-500", late ? "bg-melon" : "bg-volt")}
+        className={cn("absolute inset-y-0 left-0 w-full origin-left rounded-full transition-colors duration-500", late ? "bg-orchid" : "bg-volt")}
         style={{ transform: `scaleX(${f})` }}
       />
       {burning && f > 0 && (
@@ -26,7 +26,7 @@ export function Fuse({ frac, className, burning }: { frac: number; className?: s
 
 export function Stamp({ className, sub }: { className?: string; sub?: string }) {
   return (
-    <div className={cn("stamp-in pointer-events-none rounded-[6px] border-[4px] border-melon bg-night/40 px-4 py-1.5 text-melon", className)}>
+    <div className={cn("stamp-in pointer-events-none rounded-[6px] border-[4px] border-orchid bg-night/40 px-4 py-1.5 text-orchid", className)}>
       <span className="display narrow block text-[clamp(2rem,4.5vw,3.2rem)] leading-none tracking-[0.02em]">DESTROYED</span>
       {sub && <span className="mt-1 block text-center font-mono text-[10px] tracking-[0.16em]">{sub}</span>}
     </div>
@@ -46,8 +46,8 @@ const PHASE: Record<Phase, [string, string]> = {
   working: ["Working", "border-frost/30 text-frost"],
   readable: ["Readable", "border-volt/50 text-volt-lit"],
   locked: ["Key not in this browser", "border-frost/30 text-frost-soft"],
-  destroyed: ["Key destroyed", "border-melon/60 text-melon"],
-  failed: ["Failed", "border-melon/60 text-melon"],
+  destroyed: ["Key destroyed", "border-orchid/60 text-orchid"],
+  failed: ["Failed", "border-orchid/60 text-orchid"],
   refunded: ["Refunded", "border-frost/30 text-frost-soft"],
   missing: ["Not found", "border-frost/30 text-frost-soft"],
 };

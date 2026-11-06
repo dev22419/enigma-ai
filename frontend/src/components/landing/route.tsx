@@ -91,12 +91,12 @@ export function Route() {
             <svg viewBox="0 0 1000 420" className="absolute inset-0 size-full" aria-hidden="true">
               {STEPS.map((s, i) =>
                 s.wire ? (
-                  <path key={i} d={s.wire} fill="none" stroke={i < step ? "rgb(255 154 124 / 0.45)" : "rgb(238 238 238 / 0.14)"} strokeWidth="1.5" />
+                  <path key={i} d={s.wire} fill="none" stroke={i < step ? "rgb(242 200 248 / 0.45)" : "rgb(238 238 238 / 0.14)"} strokeWidth="1.5" />
                 ) : null,
               )}
               {current.wire && (
                 <>
-                  <path ref={trail} d={current.wire} pathLength={1} fill="none" stroke="rgb(255 154 124)" strokeWidth="2" strokeDasharray="1" strokeDashoffset="1" />
+                  <path ref={trail} d={current.wire} pathLength={1} fill="none" stroke="rgb(242 200 248)" strokeWidth="2" strokeDasharray="1" strokeDashoffset="1" />
                   <circle ref={spark} r="5" fill="rgb(255 255 255)" className="spark" />
                 </>
               )}
@@ -110,7 +110,7 @@ export function Route() {
                   key={id}
                   className={cn(
                     "absolute w-[164px] -translate-x-1/2 -translate-y-1/2 rounded-[10px] border bg-night-2 px-3.5 py-3 transition-all duration-300",
-                    on ? "border-volt-lit shadow-[0_0_0_4px_rgb(255_154_124/0.14),0_0_34px_rgb(252_115_77/0.4)]" : "border-frost/14",
+                    on ? "border-volt-lit shadow-[0_0_0_4px_rgb(255_154_124/0.14),0_0_34px_rgb(229_156_244/0.4)]" : "border-frost/14",
                   )}
                   style={{ left: `${n.x}%`, top: `${n.y}%` }}
                 >

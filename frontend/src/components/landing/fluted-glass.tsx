@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 /**
  * Fluted glass: light seen through vertical ribbed glass.
  *
- * Behind the glass, blobs of Electric Blue and Cantaloupe drift on Midnight Black, with a bright
+ * Behind the glass, blobs of Electric Blue and orchid drift on Midnight Black, with a bright
  * band where they cross. Each rib refracts the scene (compressing and bending it), and gets its
  * own highlight and shadow, which produces the vertical streaks and curved glints.
  *
@@ -33,7 +33,7 @@ uniform float uExact;   // 1 keeps the palette's exact hues: no extra blue, no t
 const vec3 NIGHT = vec3(0.008, 0.027, 0.039);
 const vec3 BLUE  = vec3(0.008, 0.592, 0.871);
 const vec3 BLUE2 = vec3(0.10, 0.45, 1.0);
-const vec3 MELON = vec3(0.988, 0.451, 0.302);
+const vec3 ORCHID = vec3(0.898, 0.612, 0.957);
 const vec3 HOT   = vec3(1.0, 0.86, 0.76);
 
 float blob(vec2 p, vec2 c, vec2 r) {
@@ -41,14 +41,14 @@ float blob(vec2 p, vec2 c, vec2 r) {
   return exp(-dot(d, d));
 }
 
-// Midnight Black on top, Electric Blue rising under it, Cantaloupe glowing low in the centre.
+// Midnight Black on top, Electric Blue rising under it, orchid glowing low in the centre.
 // Colours are mixed, not added, so every pixel stays on the palette.
 vec3 exactScene(vec2 p, float t, float aspect) {
   float rise = 0.8 + 0.035 * sin(p.x * 2.1 + t * 0.32);
   vec3 col = mix(NIGHT, BLUE, smoothstep(rise, rise - 0.36, p.y));
   float cx = aspect * (0.5 + 0.05 * sin(t * 0.19)) + (uMouse.x - 0.5) * aspect * 0.06;
   float glow = blob(p, vec2(cx, 0.4), vec2(aspect * 0.36, 0.11));
-  return mix(col, MELON, clamp(glow * 1.25, 0.0, 1.0));
+  return mix(col, ORCHID, clamp(glow * 1.25, 0.0, 1.0));
 }
 
 // The light behind the glass. p: x scaled by aspect, y in 0..1 (0 = bottom).
@@ -62,10 +62,10 @@ vec3 scene(vec2 p, float t, float aspect) {
   col += BLUE * 1.5 * blob(p, cb, vec2(0.26, 0.62));
   col += BLUE2 * 0.35 * blob(p, cb + vec2(0.25, -0.2), vec2(0.45, 0.45));
 
-  // Cantaloupe: a low, wide glow that breathes
+  // orchid: a low, wide glow that breathes
   vec2 cm = vec2(aspect * (0.72 + 0.08 * cos(t * 0.19)) + (m.x - aspect * 0.5) * 0.06, 0.22 + 0.06 * sin(t * 0.23));
-  col += MELON * 1.65 * blob(p, cm, vec2(0.34, 0.28));
-  col += MELON * 0.45 * blob(p, vec2(aspect * 0.5, -0.08), vec2(aspect * 0.5, 0.18));
+  col += ORCHID * 1.65 * blob(p, cm, vec2(0.34, 0.28));
+  col += ORCHID * 0.45 * blob(p, vec2(aspect * 0.5, -0.08), vec2(aspect * 0.5, 0.18));
 
   // A flowing S-shaped band of hot light where the two meet
   float wave = p.y - (0.42 + 0.16 * sin(p.x * 2.3 + t * 0.45) + 0.06 * sin(p.x * 5.1 - t * 0.7));

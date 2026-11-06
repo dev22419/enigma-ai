@@ -10,8 +10,8 @@ type Rgb = readonly [number, number, number];
 
 const BLUE: Rgb = [2, 151, 222];
 const LIT: Rgb = [92, 196, 255];
-const MELON: Rgb = [252, 115, 77];
-const PEACH: Rgb = [255, 190, 160];
+const ORCHID: Rgb = [229, 156, 244];
+const PETAL: Rgb = [242, 200, 248];
 const REST_TIME = 0.6; // the frame thinking-orbs shows for reduced motion
 
 const mix = (a: Rgb, b: Rgb, k: number): Rgb => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
@@ -19,7 +19,7 @@ const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
 /**
  * The package only paints in one ink, so its dots are painted here instead: position, size and depth come
- * straight from the engine, and colour runs from Electric Blue on the left to Cantaloupe on the right.
+ * straight from the engine, and colour runs from Electric Blue on the left to orchid on the right.
  * `white` is the engine's ink value: 0 is the nearest, brightest dot on a dark background.
  */
 function paintFrame(ctx: CanvasRenderingContext2D, frame: OrbFrame, design: number, t: number) {
@@ -27,8 +27,8 @@ function paintFrame(ctx: CanvasRenderingContext2D, frame: OrbFrame, design: numb
   for (const d of frame.dots) {
     const near = 1 - d.white;
     const side = clamp(0.5 + (d.x / design - 0.5) * 1.5 + drift);
-    const base = side < 0.5 ? mix(LIT, BLUE, side * 2) : mix(BLUE, MELON, Math.pow((side - 0.5) * 2, 0.75));
-    const lit = mix(base, side > 0.6 ? PEACH : LIT, near * near * 0.42);
+    const base = side < 0.5 ? mix(LIT, BLUE, side * 2) : mix(BLUE, ORCHID, Math.pow((side - 0.5) * 2, 0.75));
+    const lit = mix(base, side > 0.6 ? PETAL : LIT, near * near * 0.42);
     const k = 0.5 + 0.5 * Math.sqrt(near);
     ctx.globalAlpha = d.a ?? 1;
     ctx.fillStyle = `rgb(${(lit[0] * k) | 0},${(lit[1] * k) | 0},${(lit[2] * k) | 0})`;

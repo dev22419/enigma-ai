@@ -40,7 +40,7 @@ type Row = {
 /** One tile per task type the API accepts, each lit with one colour from the palette. */
 const FOLDERS = [
   { key: "medical", name: "Medical", tone: "#0297de" },
-  { key: "legal", name: "Legal", tone: "#fc734d" },
+  { key: "legal", name: "Legal", tone: "#e59cf4" },
   { key: "financial", name: "Financial", tone: "#eaf3f9" },
 ];
 
@@ -70,10 +70,10 @@ function StatusPill({ row, now }: { row: Row; now: number }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] whitespace-nowrap",
-        readable ? "bg-volt/15 text-volt-lit" : gone ? "bg-melon/12 text-melon" : "bg-frost/[0.07] text-frost-soft",
+        readable ? "bg-volt/15 text-volt-lit" : gone ? "bg-orchid/12 text-orchid" : "bg-frost/[0.07] text-frost-soft",
       )}
     >
-      <i className={cn("size-1.5 rounded-full", readable ? "live-dot bg-volt-lit" : gone ? "bg-melon" : "bg-frost-soft")} />
+      <i className={cn("size-1.5 rounded-full", readable ? "live-dot bg-volt-lit" : gone ? "bg-orchid" : "bg-frost-soft")} />
       {readable && row.expiresAt ? countdown(row.expiresAt - now) : row.phase === "destroyed" ? "key destroyed" : row.phase}
     </span>
   );
@@ -138,7 +138,7 @@ export function Ledger() {
     ["Prepaid balance", balance ? Number(balance.balance).toFixed(2) : "–", "USDT", ""],
     ["Jobs left", balance ? String(balance.queriesRemaining) : "–", balance ? `at ${Number(balance.queryPrice).toFixed(2)} each` : "", ""],
     ["Readable now", String(live.length), "keys still alive", "text-volt-lit"],
-    ["Destroyed", String(destroyed), "receipts kept", "text-melon"],
+    ["Destroyed", String(destroyed), "receipts kept", "text-orchid"],
   ];
 
   return (
@@ -168,7 +168,7 @@ export function Ledger() {
         ))}
       </dl>
 
-      {error && <p className="mt-4 font-mono text-[12px] text-melon">Couldn&rsquo;t load on-chain data: {error}</p>}
+      {error && <p className="mt-4 font-mono text-[12px] text-orchid">Couldn&rsquo;t load on-chain data: {error}</p>}
 
       <div className="mt-7 grid gap-7 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">

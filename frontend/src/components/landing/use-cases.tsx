@@ -47,7 +47,7 @@ function lifeBars(seconds: number): Paint {
       const wave = 0.4 + 0.42 * (0.5 + 0.5 * Math.sin(t * 2.2 + i * 0.42)) + 0.18 * noise(i, 4);
       const height = Math.max(3, wave * h);
       const on = p <= reach;
-      ctx.fillStyle = on ? (p > reach - 0.04 ? "rgb(252,115,77)" : "rgb(238,238,238)") : "rgba(238,238,238,0.1)";
+      ctx.fillStyle = on ? (p > reach - 0.04 ? "rgb(229,156,244)" : "rgb(238,238,238)") : "rgba(238,238,238,0.1)";
       ctx.fillRect(i * 7, on ? h - height : h - height * 0.3, 3.5, on ? height : height * 0.3);
     }
   };

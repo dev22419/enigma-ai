@@ -10,9 +10,9 @@ const APEX = 0.76;
 
 export function Hero() {
   return (
-    <section id="hero" className="relative isolate text-frost">
-      {/* The stage: ENIGMA far off, light pouring toward you */}
-      <div className="relative isolate h-svh min-h-[620px] overflow-hidden bg-[#030201]">
+    <section id="hero" className="mono-theme relative isolate bg-black text-frost">
+      {/* The stage: Enigma far off, light pouring toward you */}
+      <div className="relative isolate h-svh min-h-[620px] overflow-hidden bg-black">
         <LightWaves apex={APEX} />
 
         <div
@@ -20,7 +20,7 @@ export function Hero() {
           style={{ top: `${(1 - APEX) * 100 - 2.4}%` }}
         >
           <h1 className="enigma-title" data-title>
-            {"ENIGMA".split("").map((ch, i) => (
+            {"Enigma".split("").map((ch, i) => (
               <span key={i} data-letter>
                 {ch}
               </span>
@@ -28,15 +28,15 @@ export function Hero() {
           </h1>
         </div>
 
-        {/* Falls into the night of the page below */}
+        {/* Falls into the black of the page below */}
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(180deg,rgb(2_7_10/0),rgb(2_7_10/0.78)_58%,var(--night))]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(180deg,rgb(0_0_0/0),rgb(0_0_0/0.78)_58%,#000)]"
           aria-hidden="true"
         />
 
         <div className="enigma-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[1280px] px-5 pb-7 sm:px-8 sm:pb-9">
           <div className="flex flex-col gap-7 md:flex-row md:items-end md:justify-between">
-            <p className="display max-w-[16ch] text-[clamp(2rem,4.2vw,3.5rem)] text-balance [text-shadow:0_2px_30px_rgb(2_7_10/0.9)]">
+            <p className="display max-w-[16ch] text-[clamp(2rem,4.2vw,3.5rem)] text-balance [text-shadow:0_2px_30px_rgb(0_0_0/0.9)]">
               AI for documents that can&rsquo;t leak.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -59,7 +59,7 @@ export function Hero() {
       </div>
 
       {/* What it does, shown running */}
-      <div className="relative bg-night">
+      <div className="relative bg-black">
         <div className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pb-20 text-center sm:px-8 md:pb-28">
           <p className="max-w-[40rem] text-[17px] leading-[1.6] text-balance text-frost sm:text-[18px]">
             Upload a medical record, a contract or a bank statement. 0G&rsquo;s model reads it inside a sealed
