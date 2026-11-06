@@ -8,23 +8,25 @@ Enigma AI is a B2B API that lets hospitals, law firms, and banks use AI on sensi
 
 ## How It Works
 
-1. **Upload** — Company sends a sensitive document via API
-2. **Encrypt** — File encrypted server-side with per-job AES-256-GCM key
+1. **Upload** — Company sends a sensitive document to the Enigma backend
+2. **Encrypt** — Backend encrypts the file with a per-job AES-256-GCM key
 3. **Store** — Encrypted file uploaded to 0G Storage (decentralized)
 4. **Pay** — Credit deducted from prepaid USDT balance (Whitechain)
-5. **Process** — AI analyzes the document inside a sealed hardware enclave (0G TEE) — nobody can see the data, not even the machine operator
-6. **Store Result** — AI output stored in Arkiv with a self-destruct timer (5 min to 30 days)
-7. **Receipt** — On-chain compliance receipt generated (tx hash, TEE attestation, expiry)
+5. **Process** — Backend sends the document to 0G's model with `verify_tee: true` for TEE-backed inference
+6. **Store Result** — AI output encrypted and stored in Arkiv with a self-destruct timer (5 min to 30 days)
+7. **Receipt** — On-chain compliance receipt generated (tx hash, provider trace, expiry)
 8. **Destroy** — Timer expires → encryption key destroyed → ciphertext becomes cryptographically dead
 
 ## Architecture
 
 ```
-Browser → 0G Storage (encrypted files)
-       → Whitechain (USDT payment + receipts)
-       → 0G Compute TEE (private AI inference)
-       → Arkiv (expiring result storage)
+Browser → Backend  → 0G Storage (encrypted files)
+                   → 0G Compute TEE (private AI inference)
+                   → Arkiv (expiring encrypted results)
+       → Whitechain (USDT payment + on-chain receipts)
 ```
+
+> **Note:** The backend sees the plaintext during processing. Encryption at rest and TEE inference protect the data from third parties and from persistence, but the backend is a trusted component. See `docs/attestation-status.md` for the full trust model.
 
 | Layer | Technology |
 |---|---|
@@ -40,11 +42,11 @@ Browser → 0G Storage (encrypted files)
 
 We use **0gm-1.0-35b-a3b** — 0G's own multimodal model running inside TEE hardware enclaves:
 - **Input:** Text + Images (262K context window)
-- **Privacy:** Processed inside Intel TDX sealed enclave — operator cannot see data
-- **Attestation:** Cryptographic proof of private execution stored on-chain
+- **Privacy:** Requests are sent with `verify_tee: true` so 0G routes them to TEE-enabled providers
+- **On-chain trace:** We record which provider served each request and commit the trace on-chain. Independent enclave signature verification is not exposed by the router API today (see `docs/attestation-status.md`)
 - **Backup model:** Qwen3-VL-Plus (text + video + images)
 
-We do NOT use centralized AI providers (OpenAI, Claude, etc.) — data never touches any company's servers.
+We do NOT use centralized AI providers (OpenAI, Claude, etc.). The backend processes the document during inference but does not persist plaintext — only encrypted ciphertext is stored, and keys are destroyed on a timer.
 
 ## Sponsor Integration
 
