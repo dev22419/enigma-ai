@@ -1,0 +1,28 @@
+SYNTHETIC DEMO DOCUMENT. Every company and figure below is invented.
+
+ACME TRADING PVT LTD - SUMMARY FINANCIALS (INR lakh)
+
+                          FY2025-26     FY2024-25
+Revenue                     1,240         1,010
+Cost of goods sold            868           700
+Gross profit                  372           310
+Operating expenses            241           188
+Operating profit              131           122
+Interest expense               46            19
+Profit before tax              85           103
+Tax                            21            26
+Profit after tax               64            77
+
+BALANCE SHEET (31 March 2026)
+Cash and bank                  38            95
+Trade receivables             412           265
+Inventory                     301           220
+Trade payables                255           240
+Short-term borrowings         390           120
+Long-term borrowings          210           210
+Equity                        290           226
+
+NOTES
+- One customer accounted for 41% of FY2025-26 revenue.
+- Receivables over 90 days were INR 118 lakh at year end.
+- Management expects to refinance the short-term borrowings in the next quarter.
