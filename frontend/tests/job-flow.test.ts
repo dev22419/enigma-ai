@@ -26,6 +26,10 @@ vi.mock("@/lib/contract", () => ({
   createJobOnChain: m.createJobOnChain,
   completeJobOnChain: m.completeJobOnChain,
   refundJobOnChain: m.refundJobOnChain,
+  getJobHistory: vi.fn(async () => [
+    { jobId: 1, status: "Completed", createdAt: 1, deadline: 9, completedAt: 2, expirySeconds: 120, payment: "0.5",
+      fileHash: "0xf", resultHash: "0xr", attestationHash: "0xa", user: "0x00000000000000000000000000000000000000AA" },
+  ]),
   getJobOnChain: vi.fn(async () => ({
     user: "0x00000000000000000000000000000000000000AA",
     status: m.chain.status,
@@ -64,6 +68,7 @@ vi.mock("@/lib/storage", () => ({
 import { POST } from "@/app/api/jobs/route";
 import { GET as getJob } from "@/app/api/jobs/[id]/route";
 import { GET as getReceipt } from "@/app/api/jobs/[id]/receipt/route";
+import { GET as getHistory } from "@/app/api/history/route";
 import { setKeyExpiry, getActiveKey } from "@/lib/keystore";
 import { readStore } from "@/lib/store";
 import { refundFailedJobs } from "@/lib/refunds";
@@ -170,6 +175,39 @@ describe("key destruction (#52)", () => {
     m.chain.status = "None";
     expect((await get("999")).status).toBe(404);
     expect((await get("abc")).status).toBe(400);
+  });
+});
+
+describe("history (#21)", () => {
+  const history = () =>
+    getHistory(new NextRequest("http://localhost/api/history?address=0x00000000000000000000000000000000000000AA"));
+
+  it("joins on-chain jobs with receipts and destruction status, and never returns results", async () => {
+    await post(req);
+    const live = (await (await history()).json()).jobs[0];
+    expect(live).toMatchObject({ jobId: 1, keyState: "ACTIVE", keyDestroyed: false, destruction: null, completeTxHash: "0xcompletetx" });
+
+    await setKeyExpiry("1", now() - 1);
+    const done = (await (await history()).json()).jobs[0];
+    expect(done).toMatchObject({ keyState: "DESTROYED", keyDestroyed: true });
+    expect(done.destruction).toMatchObject({ valid: true });
+    expect(done.destruction.receiptHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(JSON.stringify(done)).not.toContain("RESULT-SECRET-ABC");
+  });
+
+  it("shows a failed job's error and refund state", async () => {
+    m.inference.mockRejectedValue(new Error("0G inference failed: 504"));
+    await post(req);
+    m.chain = { status: "Pending", deadline: now() - 5 };
+    await refundFailedJobs();
+    const job = (await (await history()).json()).jobs[0];
+    expect(job.error).toContain("504");
+    expect(job.refund).toMatchObject({ state: "REFUNDED" });
+  });
+
+  it("rejects a malformed address", async () => {
+    const res = await getHistory(new NextRequest("http://localhost/api/history?address=nope"));
+    expect(res.status).toBe(400);
   });
 });
 
