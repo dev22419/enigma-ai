@@ -47,7 +47,9 @@ void main() {
   float wave = 0.035 * sin(x * 2.1 + t * 0.55) + 0.022 * sin(x * 4.3 - t * 0.41) + 0.012 * sin(x * 7.7 + t * 0.73);
   float sway = x + 0.07 * sin(t * 0.23);
   float dip = 0.22 * (1.0 - pow(min(abs(sway), 1.0), 1.5));
-  float d = y - dip - wave - uLift * 0.44;
+  // Lower on the page, the colours squeeze together so every one of them still fits
+  float squeeze = 1.0 + (1.0 - uLift) * 0.67;
+  float d = (y - dip - wave - uLift * 0.44) * squeeze;
 
   vec3 c = ramp(d);
   c += (hash(gl_FragCoord.xy + fract(t)) - 0.5) * 0.012;
@@ -55,6 +57,7 @@ void main() {
 }
 `;
 
+const HOME_LIFT = 0.55; // the colour rises to about the composer
 const SCALE = 0.5; // a soft gradient loses nothing at half resolution, and stays cheap
 const FRAME_MS = 33;
 
@@ -71,10 +74,10 @@ export function useFullWave(full: boolean) {
 
 export function Wave({ full }: { full: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const target = useRef(full ? 0 : 1);
+  const target = useRef(full ? HOME_LIFT : 1);
 
   useEffect(() => {
-    target.current = full ? 0 : 1;
+    target.current = full ? HOME_LIFT : 1;
   }, [full]);
 
   useEffect(() => {
