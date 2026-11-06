@@ -1,6 +1,7 @@
 // AI-assisted: Used Claude to draft these tests
 //
-// Drives the real routes, key store, envelope encryption, redaction and refund worker.
+// Drives the real routes and refund worker against the three-endpoint API
+// (POST /jobs, POST /infer, POST /jobs/[id]/result).
 // Only the network edges (chain, Arkiv, 0G inference, 0G Storage) are replaced.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -26,6 +27,10 @@ vi.mock("@/lib/contract", () => ({
   createJobOnChain: m.createJobOnChain,
   completeJobOnChain: m.completeJobOnChain,
   refundJobOnChain: m.refundJobOnChain,
+  startProcessingOnChain: vi.fn(async () => "0xprocesstx"),
+  failJobOnChain: vi.fn(async () => "0xfailtx"),
+  markExpiredOnChain: vi.fn(async () => "0xexpiretx"),
+  markKeyDestroyedOnChain: vi.fn(async () => "0xdestroykeytx"),
   getJobHistory: vi.fn(async () => [
     { jobId: 1, status: "Completed", createdAt: 1, deadline: 9, completedAt: 2, expirySeconds: 120, payment: "0.5",
       fileHash: "0xf", resultHash: "0xr", attestationHash: "0xa", user: "0x00000000000000000000000000000000000000AA" },
@@ -59,6 +64,7 @@ vi.mock("@/lib/arkiv", () => ({
 vi.mock("@/lib/og-inference", () => ({
   runInference: m.inference,
   getTeeAttestation: vi.fn(async () => "tee-attestation"),
+  mimeTypeFromFileName: vi.fn(() => "image/png"),
 }));
 vi.mock("@/lib/storage", () => ({
   storageConfigured: () => m.storageOn,
@@ -66,26 +72,54 @@ vi.mock("@/lib/storage", () => ({
 }));
 
 import { POST } from "@/app/api/jobs/route";
+import { POST as postInfer } from "@/app/api/infer/route";
+import { POST as postResult } from "@/app/api/jobs/[id]/result/route";
 import { GET as getJob } from "@/app/api/jobs/[id]/route";
 import { GET as getReceipt } from "@/app/api/jobs/[id]/receipt/route";
 import { GET as getHistory } from "@/app/api/history/route";
-import { setKeyExpiry, getActiveKey } from "@/lib/keystore";
 import { readStore } from "@/lib/store";
 import { refundFailedJobs } from "@/lib/refunds";
 
-const DOC = "PATIENT-SECRET-XYZ John Doe, DOB 1980-01-01, HbA1c 9.1%";
 const RESULT = "RESULT-SECRET-ABC high HbA1c, adjust medication";
+const RESULT_HASH = ethers.keccak256(ethers.toUtf8Bytes(RESULT));
+const ATT_HASH = ethers.keccak256(ethers.toUtf8Bytes("tee-attestation"));
+const FILE_HASH = "0x5a9188787b5b9e1843d261277358102ac28f85e24bc5b4aef1a31dceaae52ab4";
 const now = () => Math.floor(Date.now() / 1000);
 let dataDir: string;
 let logged: string[];
 
-function post(body: unknown) {
+function postJob(body: unknown) {
   return POST(new NextRequest("http://localhost/api/jobs", { method: "POST", body: JSON.stringify(body) }));
 }
+function inferReq(body: unknown) {
+  return postInfer(new NextRequest("http://localhost/api/infer", { method: "POST", body: JSON.stringify(body) }));
+}
+function storeResultReq(id: string, body: unknown, token: string) {
+  return postResult(
+    new NextRequest(`http://localhost/api/jobs/${id}/result`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "x-access-token": token },
+    }),
+    { params: Promise.resolve({ id }) }
+  );
+}
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
-const get = (id: string) => getJob(new NextRequest(`http://localhost/api/jobs/${id}`), ctx(id));
+const get = (id: string, token = "") =>
+  getJob(
+    new NextRequest(`http://localhost/api/jobs/${id}`, { headers: { "x-access-token": token } }),
+    ctx(id)
+  );
 const receipt = (id: string) => getReceipt(new NextRequest(`http://localhost/api/jobs/${id}/receipt`), ctx(id));
-const req = { taskType: "medical", ttl: 120, fileName: "report.txt", fileContent: DOC };
+
+const jobReq = {
+  taskType: "medical",
+  ttl: 120,
+  fileName: "report.txt",
+  fileHash: FILE_HASH,
+  encryptedFile: "ENCRYPTED_CIPHERTEXT_DATA",
+};
+const inferBody = { taskType: "medical", content: "Patient record content", fileName: "report.txt" };
 const storeText = () => readFileSync(path.join(dataDir, "store.json"), "utf8");
 
 beforeEach(() => {
@@ -103,7 +137,7 @@ beforeEach(() => {
   m.completeJobOnChain.mockReset().mockResolvedValue("0xcompletetx");
   m.refundJobOnChain.mockReset().mockResolvedValue("0xrefundtx");
   m.uploadCiphertext.mockReset().mockResolvedValue({ rootHash: "0xroot", txHash: "0xstoragetx" });
-  m.inference.mockReset().mockResolvedValue({ chatId: "chat-1", content: RESULT, provider: "p", requestId: "r" });
+  m.inference.mockReset().mockResolvedValue({ chatId: "chat-1", content: RESULT, provider: "p", requestId: "r", finishReason: "stop" });
   logged = [];
   for (const level of ["log", "info", "warn", "error", "debug"] as const) {
     vi.spyOn(console, level).mockImplementation((...a: unknown[]) => { logged.push(a.map(String).join(" ")); });
@@ -111,66 +145,75 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("successful job cycle: nothing sensitive is kept (#63)", () => {
-  it("never writes the document, the result or key material to disk, logs or errors", async () => {
-    const res = await post(req);
-    const body = await res.json();
+async function createAndComplete() {
+  const createRes = await postJob(jobReq);
+  const createBody = await createRes.json();
+  const { jobId: id, accessToken } = createBody;
+
+  m.chain.status = "Pending";
+  const resultPayload = {
+    encryptedResult: "ENCRYPTED_RESULT_CIPHERTEXT",
+    resultHash: RESULT_HASH,
+    attestationHash: ATT_HASH,
+    chatId: "chat-1",
+  };
+  await storeResultReq(id, resultPayload, accessToken);
+  m.chain.status = "Completed";
+  return { id, accessToken };
+}
+
+describe("three-endpoint job flow", () => {
+  it("creates a job, runs inference, stores result, and completes on-chain", async () => {
+    const createRes = await postJob(jobReq);
+    expect(createRes.status).toBe(200);
+    const createBody = await createRes.json();
+    expect(createBody.jobId).toBe("1");
+    expect(createBody.createTxHash).toBe("0xcreatetx");
+    expect(createBody.accessToken).toBeTruthy();
+
+    const iRes = await inferReq(inferBody);
+    expect(iRes.status).toBe(200);
+    const iBody = await iRes.json();
+    expect(iBody.result).toBe(RESULT);
+    expect(iBody.chatId).toBe("chat-1");
+    expect(iBody.resultHash).toBeTruthy();
+    expect(iBody.attestationHash).toBeTruthy();
+
+    m.chain.status = "Pending";
+    const resultRes = await storeResultReq("1", {
+      encryptedResult: "ENCRYPTED_RESULT",
+      resultHash: iBody.resultHash,
+      attestationHash: iBody.attestationHash,
+      chatId: iBody.chatId,
+    }, createBody.accessToken);
+    expect(resultRes.status).toBe(200);
+    const resultBody = await resultRes.json();
+    expect(resultBody.completeTxHash).toBe("0xcompletetx");
+    expect(resultBody.arkivEntityKey).toBeTruthy();
+
+    const store = await readStore();
+    expect(store.jobs["1"].status).toBe("completed");
+    expect(store.jobs["1"].completeTxHash).toBe("0xcompletetx");
+  });
+
+  it("returns the encrypted result from GET with a valid access token", async () => {
+    const { id, accessToken } = await createAndComplete();
+    const res = await get(id, accessToken);
     expect(res.status).toBe(200);
-    expect(body.result).toBe(RESULT); // the caller gets the result once, in the response
+    const body = await res.json();
+    expect(body.status).toBe("Completed");
+    expect(body.encryptedResult).toBeTruthy();
+  });
 
-    const id = body.jobId as string;
-    const keyBase64 = (await readStore()).keys[id].keyMaterial as string;
-    expect(keyBase64).toBeTruthy(); // the live key exists while the result is alive
-
-    // Arkiv, the only external store of the result, holds ciphertext only.
-    const stored = m.arkiv.get(id)!.envelopeJson;
-    expect(stored).not.toContain("RESULT-SECRET-ABC");
-    expect(stored).not.toContain("PATIENT-SECRET-XYZ");
-
-    // Local store: no plaintext, ever.
-    expect(storeText()).not.toContain("PATIENT-SECRET-XYZ");
-    expect(storeText()).not.toContain("RESULT-SECRET-ABC");
-
-    // Let the key expire and destroy it through a normal request.
-    await setKeyExpiry(id, now() - 1);
-    await get(id);
-    const after = storeText();
-    expect(after).not.toContain(keyBase64);
-    expect((await readStore()).keys[id].keyMaterial).toBeNull();
-
-    // Nothing printed, and no error body, carried secrets.
-    const everything = logged.join("\n") + JSON.stringify(body);
-    expect(everything).not.toContain(keyBase64);
-    expect(everything).not.toContain("PATIENT-SECRET-XYZ");
-    expect(logged.join("\n")).not.toContain("RESULT-SECRET-ABC");
+  it("local store never contains plaintext secrets", async () => {
+    await createAndComplete();
+    const text = storeText();
+    expect(text).not.toContain("RESULT-SECRET-ABC");
+    expect(text).not.toContain("PATIENT-SECRET-XYZ");
   });
 });
 
 describe("key destruction (#52)", () => {
-  it("keeps the ciphertext byte-for-byte, but every API path stops returning the result", async () => {
-    const id = String((await (await post(req)).json()).jobId);
-    const ciphertext = m.arkiv.get(id)!.envelopeJson;
-
-    const live = await (await get(id)).json();
-    expect(live.result).toBe(RESULT);
-    expect(live.keyDestroyed).toBe(false);
-
-    await setKeyExpiry(id, now() - 1);
-    const dead = await (await get(id)).json();
-    expect(dead.result).toBeNull();
-    expect(dead.keyDestroyed).toBe(true);
-    expect(dead.keyState).toBe("DESTROYED");
-    expect(dead.arkivEntityExists).toBe(true); // the ciphertext is still there...
-    expect(dead.ciphertextPreview).toBeTruthy();
-    expect(m.arkiv.get(id)!.envelopeJson).toBe(ciphertext); // ...unchanged
-    expect(await getActiveKey(id)).toBeNull(); // ...and undecryptable
-
-    const r = await (await receipt(id)).json();
-    expect(r.keyDestroyed).toBe(true);
-    expect(r.destructionReceiptValid).toBe(true);
-    expect(JSON.stringify(r)).not.toContain("RESULT-SECRET-ABC");
-  });
-
   it("returns 404 for a job that does not exist and 400 for a bad id", async () => {
     m.chain.status = "None";
     expect((await get("999")).status).toBe(404);
@@ -182,26 +225,35 @@ describe("history (#21)", () => {
   const history = () =>
     getHistory(new NextRequest("http://localhost/api/history?address=0x00000000000000000000000000000000000000AA"));
 
-  it("joins on-chain jobs with receipts and destruction status, and never returns results", async () => {
-    await post(req);
-    const live = (await (await history()).json()).jobs[0];
-    expect(live).toMatchObject({ jobId: 1, keyState: "ACTIVE", keyDestroyed: false, destruction: null, completeTxHash: "0xcompletetx" });
-
-    await setKeyExpiry("1", now() - 1);
-    const done = (await (await history()).json()).jobs[0];
-    expect(done).toMatchObject({ keyState: "DESTROYED", keyDestroyed: true });
-    expect(done.destruction).toMatchObject({ valid: true });
-    expect(done.destruction.receiptHash).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(JSON.stringify(done)).not.toContain("RESULT-SECRET-ABC");
+  it("joins on-chain jobs with local store data", async () => {
+    await createAndComplete();
+    const res = await history();
+    const body = await res.json();
+    const job = body.jobs[0];
+    expect(job).toMatchObject({ jobId: 1, destruction: null, completeTxHash: "0xcompletetx" });
   });
 
   it("shows a failed job's error and refund state", async () => {
-    m.inference.mockRejectedValue(new Error("0G inference failed: 504"));
-    await post(req);
+    const createRes = await postJob(jobReq);
+    const createBody = await createRes.json();
+    const { jobId: id, accessToken } = createBody;
+
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValueOnce(new Error("chain timeout"));
+    await storeResultReq(id, {
+      encryptedResult: "ENC",
+      resultHash: RESULT_HASH,
+      attestationHash: ATT_HASH,
+      chatId: "chat-1",
+    }, accessToken);
+
+    const store = await readStore();
+    expect(store.jobs[id].status).toBe("failed");
+
     m.chain = { status: "Pending", deadline: now() - 5 };
     await refundFailedJobs();
     const job = (await (await history()).json()).jobs[0];
-    expect(job.error).toContain("504");
+    expect(job.error).toBeTruthy();
     expect(job.refund).toMatchObject({ state: "REFUNDED" });
   });
 
@@ -212,31 +264,41 @@ describe("history (#21)", () => {
 });
 
 describe("failure path (#62)", () => {
-  it("fails closed when inference breaks: key destroyed, no completion, nothing leaked", async () => {
-    const blob = Buffer.alloc(120, 5).toString("base64");
-    m.inference.mockRejectedValue(new Error(`0G inference failed: 504 upstream echoed ${DOC} ${blob}`));
-    const res = await post(req);
-    const body = await res.json();
+  it("records a failed result-store in the local store", async () => {
+    const createRes = await postJob(jobReq);
+    const { jobId: id, accessToken } = await createRes.json();
+
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValueOnce(new Error("chain error: 504"));
+    const res = await storeResultReq(id, {
+      encryptedResult: "ENC",
+      resultHash: RESULT_HASH,
+      attestationHash: ATT_HASH,
+      chatId: "chat-1",
+    }, accessToken);
     expect(res.status).toBe(502);
-    expect(body.jobId).toBe("1");
-    expect(body.error).not.toContain(blob);
-    expect(body.error.length).toBeLessThanOrEqual(301);
-    expect(m.completeJobOnChain).not.toHaveBeenCalled();
 
     const s = await readStore();
-    expect(s.jobs["1"].status).toBe("failed");
-    expect(s.jobs["1"].error).not.toContain(blob);
-    expect(s.keys["1"].state).toBe("DESTROYED");
-    expect(s.keys["1"].keyMaterial).toBeNull();
-    expect(storeText()).not.toContain(blob);
+    expect(s.jobs[id].status).toBe("failed");
+    expect(s.jobs[id].error).toBeTruthy();
+    expect(m.completeJobOnChain).toHaveBeenCalled();
   });
 
   it("refunds a failed job only after its deadline, and only once", async () => {
-    m.inference.mockRejectedValue(new Error("0G inference failed: 504 timeout"));
-    await post(req);
+    const createRes = await postJob(jobReq);
+    const { jobId: id, accessToken } = await createRes.json();
+
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
+    await storeResultReq(id, {
+      encryptedResult: "ENC",
+      resultHash: RESULT_HASH,
+      attestationHash: ATT_HASH,
+      chatId: "chat-1",
+    }, accessToken);
 
     m.chain = { status: "Pending", deadline: now() + 1000 };
-    expect(await refundFailedJobs()).toEqual([]); // too early
+    expect(await refundFailedJobs()).toEqual([]);
     expect(m.refundJobOnChain).not.toHaveBeenCalled();
 
     m.chain = { status: "Pending", deadline: now() - 5 };
@@ -246,28 +308,40 @@ describe("failure path (#62)", () => {
     const job = (await readStore()).jobs["1"];
     expect(job.refund).toMatchObject({ state: "REFUNDED", txHash: "0xrefundtx" });
 
-    expect(await refundFailedJobs()).toEqual([]); // idempotent
+    expect(await refundFailedJobs()).toEqual([]);
     expect(m.refundJobOnChain).toHaveBeenCalledTimes(1);
   });
 
   it("records a refund someone else already sent, and never refunds a completed job", async () => {
-    m.inference.mockRejectedValue(new Error("boom"));
-    await post(req); // job 1
+    const res1 = await postJob(jobReq);
+    const { jobId: id1, accessToken: tok1 } = await res1.json();
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
+    await storeResultReq(id1, { encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "c" }, tok1);
 
     m.chain = { status: "Refunded", deadline: now() - 5 };
     await refundFailedJobs();
-    expect((await readStore()).jobs["1"].refund).toMatchObject({ state: "REFUNDED", txHash: null });
+    expect((await readStore()).jobs[id1].refund).toMatchObject({ state: "REFUNDED", txHash: null });
 
-    await post(req); // job 2
+    const res2 = await postJob(jobReq);
+    const { jobId: id2, accessToken: tok2 } = await res2.json();
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
+    await storeResultReq(id2, { encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "c" }, tok2);
+
     m.chain = { status: "Completed", deadline: now() - 5 };
     await refundFailedJobs();
-    expect((await readStore()).jobs["2"].refund).toMatchObject({ state: "NOT_REQUIRED" });
+    expect((await readStore()).jobs[id2].refund).toMatchObject({ state: "NOT_REQUIRED" });
     expect(m.refundJobOnChain).not.toHaveBeenCalled();
   });
 
   it("retries on the next pass when the refund transaction fails", async () => {
-    m.inference.mockRejectedValue(new Error("boom"));
-    await post(req);
+    const res = await postJob(jobReq);
+    const { jobId: id, accessToken } = await res.json();
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
+    await storeResultReq(id, { encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "c" }, accessToken);
+
     m.chain = { status: "Pending", deadline: now() - 5 };
     m.refundJobOnChain.mockRejectedValueOnce(new Error("rpc down"));
     expect(await refundFailedJobs()).toEqual([]);
@@ -279,55 +353,45 @@ describe("failure path (#62)", () => {
 describe("model output guards", () => {
   it("fails closed when the model returns no answer (all tokens spent reasoning)", async () => {
     m.inference.mockResolvedValue({ chatId: "c", content: "   ", provider: "p", requestId: "r", finishReason: "length" });
-    const res = await post(req);
+    const res = await inferReq(inferBody);
     expect(res.status).toBe(502);
     expect((await res.json()).error).toContain("empty result");
-    expect(m.completeJobOnChain).not.toHaveBeenCalled(); // the provider is not paid for nothing
-    expect(m.arkiv.size).toBe(0); // nothing stored
-    const s = await readStore();
-    expect(s.jobs["1"].status).toBe("failed");
-    expect(s.keys["1"].state).toBe("DESTROYED");
   });
 
   it("marks an answer that hit the length limit as truncated", async () => {
     m.inference.mockResolvedValue({ chatId: "c", content: "Partial analysis", provider: "p", requestId: "r", finishReason: "length" });
-    const body = await (await post(req)).json();
+    const body = await (await inferReq(inferBody)).json();
     expect(body.result).toContain("Partial analysis");
     expect(body.result).toContain("[Output truncated");
   });
 
   it("leaves a complete answer untouched", async () => {
     m.inference.mockResolvedValue({ chatId: "c", content: "Full analysis", provider: "p", requestId: "r", finishReason: "stop" });
-    expect((await (await post(req)).json()).result).toBe("Full analysis");
+    expect((await (await inferReq(inferBody)).json()).result).toBe("Full analysis");
   });
 });
 
 describe("0G Storage (#49)", () => {
-  it("uploads only the encrypted input and records where it went", async () => {
+  it("uploads ciphertext and records where it went", async () => {
     m.storageOn = true;
-    const res = await post(req);
+    const res = await postJob(jobReq);
     expect(res.status).toBe(200);
     expect(m.uploadCiphertext).toHaveBeenCalledTimes(1);
-    const uploaded = m.uploadCiphertext.mock.calls[0][0] as string;
-    expect(uploaded).not.toContain("PATIENT-SECRET-XYZ");
-    const env = JSON.parse(uploaded);
-    expect(env).toMatchObject({ version: 1, algorithm: "AES-256-GCM", aad: { jobId: "1", objectType: "input" } });
+    expect(m.uploadCiphertext).toHaveBeenCalledWith(jobReq.encryptedFile);
     expect((await readStore()).jobs["1"].inputStorage).toEqual({ rootHash: "0xroot", txHash: "0xstoragetx" });
   });
 
-  it("fails closed, before any inference, when the upload fails", async () => {
+  it("fails closed when the upload fails", async () => {
     m.storageOn = true;
     m.uploadCiphertext.mockRejectedValue(new Error("0G Storage upload failed: no gas"));
-    const res = await post(req);
+    const res = await postJob(jobReq);
     expect(res.status).toBe(502);
-    expect(m.inference).not.toHaveBeenCalled(); // the document never reaches the model
     expect(m.completeJobOnChain).not.toHaveBeenCalled();
-    expect((await readStore()).jobs["1"].status).toBe("failed");
-    expect((await readStore()).keys["1"].state).toBe("DESTROYED");
   });
 
   it("skips storage when it is not configured", async () => {
-    await post(req);
+    const res = await postJob(jobReq);
+    expect(res.status).toBe(200);
     expect(m.uploadCiphertext).not.toHaveBeenCalled();
     expect((await readStore()).jobs["1"].inputStorage ?? null).toBeNull();
   });
@@ -336,27 +400,55 @@ describe("0G Storage (#49)", () => {
 describe("request guards", () => {
   it("rejects bad input before touching the chain", async () => {
     for (const bad of [
-      { ...req, taskType: "tax" },
-      { ...req, ttl: 5 },
-      { ...req, ttl: 90.5 },
-      { ...req, fileContent: "" },
-      { ...req, fileContent: 123 },
+      { ...jobReq, taskType: "tax" },
+      { ...jobReq, ttl: 5 },
+      { ...jobReq, ttl: 90.5 },
+      { ...jobReq, fileName: "" },
+      { ...jobReq, fileHash: "not-a-hash" },
+      { ...jobReq, encryptedFile: "" },
     ]) {
-      expect((await post(bad)).status).toBe(400);
+      expect((await postJob(bad)).status).toBe(400);
     }
     expect(m.createJobOnChain).not.toHaveBeenCalled();
   });
 
-  it("rejects an oversized file with 413, before touching the chain", async () => {
-    const res = await post({ ...req, fileContent: "a".repeat(8_000_001) });
+  it("rejects an oversized ciphertext with 413, before touching the chain", async () => {
+    const res = await postJob({ ...jobReq, encryptedFile: "a".repeat(12_000_001) });
     expect(res.status).toBe(413);
     expect(m.createJobOnChain).not.toHaveBeenCalled();
   });
 
   it("refuses to lock a payment when keys are misconfigured", async () => {
     process.env.ORACLE_PRIVATE_KEY = "not-a-key";
-    const res = await post(req);
+    const res = await postJob(jobReq);
     expect(res.status).toBe(503);
     expect(m.createJobOnChain).not.toHaveBeenCalled();
+  });
+
+  it("requires an access token to store a result", async () => {
+    const createRes = await postJob(jobReq);
+    const { jobId: id } = await createRes.json();
+    m.chain.status = "Pending";
+    const res = await postResult(
+      new NextRequest(`http://localhost/api/jobs/${id}/result`, {
+        method: "POST",
+        body: JSON.stringify({ encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "c" }),
+      }),
+      { params: Promise.resolve({ id }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects an invalid access token", async () => {
+    const createRes = await postJob(jobReq);
+    const { jobId: id } = await createRes.json();
+    m.chain.status = "Pending";
+    const res = await storeResultReq(id, {
+      encryptedResult: "E",
+      resultHash: RESULT_HASH,
+      attestationHash: ATT_HASH,
+      chatId: "c",
+    }, "wrong-token");
+    expect(res.status).toBe(403);
   });
 });

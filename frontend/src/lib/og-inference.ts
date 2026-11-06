@@ -18,10 +18,24 @@ interface InferenceResult {
   finishReason: string;
 }
 
+const MIME_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+export function mimeTypeFromFileName(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_TYPES[ext] ?? "image/png";
+}
+
 export async function runInference(
   taskType: TaskType,
   fileContent: string,
-  imageBase64?: string
+  imageBase64?: string,
+  mimeType = "image/png"
 ): Promise<InferenceResult> {
   const apiKey = process.env.ZG_API_KEY;
   if (!apiKey) throw new Error("ZG_API_KEY not configured");
@@ -37,7 +51,7 @@ export async function runInference(
         { type: "text", text: "Analyze this document:" },
         {
           type: "image_url",
-          image_url: { url: `data:image/png;base64,${imageBase64}` },
+          image_url: { url: `data:${mimeType};base64,${imageBase64}` },
         },
       ],
     });
