@@ -281,11 +281,15 @@ export function hasKey(jobId: string) {
 }
 
 export function storeToken(jobId: string, token: string) {
-  session()?.setItem(TOKEN_PREFIX + jobId, token);
+  try { localStorage.setItem(TOKEN_PREFIX + jobId, token); } catch { /* best effort */ }
 }
 
 export function loadToken(jobId: string) {
-  return session()?.getItem(TOKEN_PREFIX + jobId) ?? null;
+  try {
+    return localStorage.getItem(TOKEN_PREFIX + jobId) ?? session()?.getItem(TOKEN_PREFIX + jobId) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ------------------------------------------------------------------ destruction
@@ -315,6 +319,7 @@ export async function wipeKey(jobId: string, expiryTimestamp: number): Promise<W
     await idbDelete(db, KEY_STORE, jobId);
     db.close();
     heldKeys.delete(jobId);
+    try { localStorage.removeItem(TOKEN_PREFIX + jobId); } catch { /* best effort */ }
     return saveWipeReceipt(jobId, row.keyId ?? "unknown", expiryTimestamp);
   } catch {
     return null;
