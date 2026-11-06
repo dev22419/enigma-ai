@@ -315,4 +315,78 @@ describe("EnigmaAI lifecycle", () => {
       expect(await usdt.balanceOf(provider.address)).to.equal(PRICE);
     });
   });
+
+  describe("whole lifecycle", () => {
+    it("walks the happy path in order: Pending, Processing, Completed, Expired, KeyDestroyed", async () => {
+      const { enigma, company, oracle, domain } = await loadFixture(withJob);
+      const seen = [(await enigma.getJob(1n)).status];
+      await enigma.connect(oracle).startProcessing(1n);
+      seen.push((await enigma.getJob(1n)).status);
+      await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, await signComplete(oracle, domain, 1n, company.address));
+      seen.push((await enigma.getJob(1n)).status);
+      await time.increase(EXPIRY);
+      await enigma.markExpired(1n);
+      seen.push((await enigma.getJob(1n)).status);
+      await enigma.connect(oracle).markKeyDestroyed(1n, h("receipt"));
+      seen.push((await enigma.getJob(1n)).status);
+      expect(seen).to.deep.equal([Status.Pending, Status.Processing, Status.Completed, Status.Expired, Status.KeyDestroyed]);
+    });
+
+    it("walks the failure path in order: Pending, Processing, Failed, Refunded", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      const seen = [(await enigma.getJob(1n)).status];
+      await enigma.connect(oracle).startProcessing(1n);
+      seen.push((await enigma.getJob(1n)).status);
+      await enigma.connect(oracle).failJob(1n, "provider timeout");
+      seen.push((await enigma.getJob(1n)).status);
+      await enigma.refundJob(1n);
+      seen.push((await enigma.getJob(1n)).status);
+      expect(seen).to.deep.equal([Status.Pending, Status.Processing, Status.Failed, Status.Refunded]);
+    });
+
+    it("keeps each job's state independent", async () => {
+      const { enigma, company, oracle, domain } = await loadFixture(withJob);
+      await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // job 2
+      await enigma.connect(oracle).startProcessing(2n);
+      await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, await signComplete(oracle, domain, 1n, company.address));
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Completed);
+      expect((await enigma.getJob(2n)).status).to.equal(Status.Processing);
+    });
+
+    it("keeps the contract's USDT equal to balances plus unreleased locks in every state", async () => {
+      const { enigma, usdt, company, oracle, domain } = await loadFixture(deploy);
+      const addr = await enigma.getAddress();
+      const solvent = async (locked) =>
+        expect(await usdt.balanceOf(addr)).to.equal((await enigma.balances(company.address)) + locked);
+
+      await enigma.connect(company).deposit(PRICE * 6n);
+      for (let i = 0; i < 5; i++) await enigma.connect(company).createJob(FILE_HASH, EXPIRY); // jobs 1-5
+      await solvent(PRICE * 5n);
+
+      await enigma.connect(oracle).startProcessing(1n);
+      await enigma.connect(oracle).startProcessing(2n);
+      await enigma.connect(oracle).startProcessing(3n);
+      await solvent(PRICE * 5n);
+
+      await enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, await signComplete(oracle, domain, 1n, company.address));
+      await solvent(PRICE * 4n);
+      await enigma.connect(oracle).failJob(2n, "failed");
+      await enigma.refundJob(2n);
+      await solvent(PRICE * 3n);
+
+      await time.increase(EXPIRY);
+      await enigma.markExpired(1n);
+      await enigma.connect(oracle).markKeyDestroyed(1n, h("receipt"));
+      await solvent(PRICE * 3n); // expiry and destruction never move money
+
+      await time.increase(TIMEOUT + 1n);
+      await enigma.refundJob(3n); // Processing past the deadline
+      await enigma.refundJob(4n); // Pending past the deadline
+      await enigma.refundJob(5n);
+      await solvent(0n);
+
+      await enigma.connect(company).withdraw(await enigma.balances(company.address));
+      expect(await usdt.balanceOf(addr)).to.equal(0n);
+    });
+  });
 });
