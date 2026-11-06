@@ -1,5 +1,10 @@
 export const ZG_API_URL = "https://router-api.0g.ai/v1";
-export const ZG_MODEL = "0gm-1.0-35b-a3b";
+// The model that reads documents. Override with ZG_MODEL. It must be TEE-attested on the 0G router
+// (GET /v1/models, "tee_attested": true), otherwise documents would leave the enclave.
+export const ZG_MODEL = process.env.ZG_MODEL || "0gm-1.0-35b-a3b";
+// Optional: a second attested model, tried for text documents only when the first model's provider fails.
+// Leave empty to never fall back. The attestation records which model actually answered.
+export const ZG_FALLBACK_MODEL = process.env.ZG_FALLBACK_MODEL || "";
 
 export const WHITECHAIN_RPC = process.env.WHITECHAIN_RPC || "https://rpc.ankr.com/whitechain_testnet";
 export const WHITECHAIN_CHAIN_ID = 1874;

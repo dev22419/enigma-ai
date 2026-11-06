@@ -107,7 +107,8 @@ export async function POST(req: NextRequest) {
     const attestation = await getTeeAttestation(
       inference.chatId,
       inference.provider,
-      inference.requestId
+      inference.requestId,
+      inference.model
     );
     if (!attestation) {
       await release();
@@ -121,6 +122,7 @@ export async function POST(req: NextRequest) {
       attestationHash: hashContent(attestation),
       provider: inference.provider,
       requestId: inference.requestId,
+      model: inference.model,
     };
     // Remember what the enclave said. The result route will only sign for these exact values.
     await withStore((d) => {

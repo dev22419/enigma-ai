@@ -51,6 +51,8 @@ export interface InferResponse {
   attestationHash: string;
   provider: string;
   requestId: string;
+  /** The model that answered, as recorded in the attestation. */
+  model: string;
 }
 
 export interface StoreResultRequest {
