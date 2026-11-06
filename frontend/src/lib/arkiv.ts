@@ -3,12 +3,14 @@ import {
   createWalletClient,
   ExpirationTime,
 } from "@arkiv-network/sdk";
+import { eq } from "@arkiv-network/sdk/query";
 import { rabdi } from "@arkiv-network/sdk/chains";
 import { bytes, str, defineSchema } from "@arkiv-network/sdk/schema";
 import { http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Hex } from "viem";
 
+// Arkiv entities are PUBLIC. `data` must only ever hold an AES-GCM envelope.
 const schema = defineSchema("enigma-ai.results", {
   jobId: str().indexed(),
   data: bytes(),
@@ -26,67 +28,66 @@ function getPublicClient() {
 function getWalletClient() {
   const key = process.env.DEPLOYER_PRIVATE_KEY;
   if (!key) throw new Error("DEPLOYER_PRIVATE_KEY not configured");
-  const account = privateKeyToAccount(key as Hex);
   return createWalletClient({
     chain: getChain(),
     transport: http(),
-    account,
+    account: privateKeyToAccount(key as Hex),
   });
 }
 
-function ttlToExpiration(ttlSeconds: number) {
-  const days = Math.ceil(ttlSeconds / 86400);
-  if (days >= 1) return ExpirationTime.fromDays(days);
-  const minutes = Math.ceil(ttlSeconds / 60);
-  return ExpirationTime.fromMinutes(minutes);
+// Arkiv expiries are block heights. Convert one to unix seconds using the
+// chain's own clock, so the countdown shows what Arkiv will enforce.
+async function blockToUnix(expiresAtBlock: bigint): Promise<number> {
+  const t = await getPublicClient().getBlockTiming();
+  return Math.floor(t.currentBlockTime + Number(expiresAtBlock - t.currentBlock) * t.blockDuration);
 }
 
 export async function storeInArkiv(
   jobId: string,
-  data: string,
+  envelopeJson: string,
   ttlSeconds: number
-): Promise<string> {
+): Promise<{ entityKey: string; expiresAtUnix: number; txHash: string }> {
   const client = getWalletClient();
-  const encoded = new TextEncoder().encode(data);
+  const { blockDuration } = await getPublicClient().getBlockTiming();
+  // fromSeconds only accepts whole numbers of blocks; round up, never down.
+  const seconds = Math.ceil(ttlSeconds / blockDuration) * blockDuration;
 
-  const { entityKey, expiresAt } = await client.createEntity(
+  const res = await client.createEntity(
     schema,
-    {
-      jobId,
-      data: encoded,
-    },
-    { expiration: ttlToExpiration(ttlSeconds) }
+    { jobId, data: new TextEncoder().encode(envelopeJson) },
+    { expiration: ExpirationTime.fromSeconds(seconds) }
   );
 
-  return entityKey;
+  const expiresAtUnix =
+    typeof res.expiresAt === "bigint"
+      ? await blockToUnix(res.expiresAt)
+      : Math.floor(Date.now() / 1000) + seconds;
+
+  return { entityKey: res.entityKey, expiresAtUnix, txHash: res.txHash };
 }
 
 export async function fetchFromArkiv(
   jobId: string
-): Promise<{ data: string; expiresAt: number; exists: boolean }> {
-  const client = getPublicClient();
-  const account = getWalletClient().account;
-
-  const { entities } = await client
-    .select({ jobId: true, data: true, $expiresAt: true })
+): Promise<{ exists: boolean; envelopeJson: string | null; expiresAtUnix: number; entityKey: string | null }> {
+  const { entities } = await getPublicClient()
+    .select({ $key: true, jobId: true, data: true, $expiresAt: true })
     .from(schema)
-    .ownedBy(account.address)
+    .where(eq("jobId", jobId))
     .fetch();
 
-  const match = entities.find((e) => e.jobId.value === jobId);
+  const match = entities[0];
+  if (!match) return { exists: false, envelopeJson: null, expiresAtUnix: 0, entityKey: null };
 
-  if (!match) {
-    return { data: "", expiresAt: 0, exists: false };
-  }
-
-  const hex = match.data.value.startsWith("0x")
-    ? match.data.value.slice(2)
-    : match.data.value;
-  const decoded = Buffer.from(hex, "hex").toString("utf-8");
+  const raw = match.data.value as unknown;
+  const envelopeJson =
+    raw instanceof Uint8Array
+      ? new TextDecoder().decode(raw)
+      : Buffer.from(String(raw).replace(/^0x/, ""), "hex").toString("utf-8");
 
   return {
-    data: decoded,
-    expiresAt: Number(match.$expiresAt),
     exists: true,
+    envelopeJson,
+    expiresAtUnix: await blockToUnix(BigInt(match.$expiresAt as bigint)),
+    entityKey: String(match.$key),
   };
 }

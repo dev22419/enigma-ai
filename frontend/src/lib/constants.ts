@@ -16,3 +16,6 @@ export const SYSTEM_PROMPTS: Record<TaskType, string> = {
   financial:
     "You are a financial document analyst. Analyze the provided document and extract key figures, trends, risks, and recommendations. Be thorough but concise.",
 };
+
+export const MIN_TTL_SECONDS = 60;
+export const MAX_TTL_SECONDS = 30 * 24 * 60 * 60;

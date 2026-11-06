@@ -27,16 +27,25 @@ export interface CreateJobResponse {
   jobId: string;
   status: string;
   result: string | null;
-  txHash: string | null;
-  attestationHash: string | null;
-  expiresAt: number | null;
+  requestId: string;
+  attestationHash: string;
+  createTxHash: string;
+  txHash: string;
+  arkivEntityKey: string;
+  keyId: string;
+  expiresAt: number;
 }
 
 export interface JobReceipt {
   jobId: string;
-  txHash: string;
-  attestationHash: string;
-  resultHash: string;
+  requestId: string | null;
+  createTxHash: string | null;
+  completeTxHash: string | null;
+  attestationHash: string | null;
+  resultHash: string | null;
   fileHash: string;
-  expired: boolean;
+  arkivEntityKey: string | null;
+  expiresAt: number | null;
+  keyDestroyed: boolean;
+  destruction: import("./store").DestructionReceipt | null;
 }
