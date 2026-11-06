@@ -53,7 +53,7 @@ export function SiteFooter() {
 
       <footer className="mono-theme bg-black text-frost">
         <div className="shell">
-          <div className="grid gap-10 border-t border-frost/12 py-14 sm:grid-cols-3 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
+          <div className="grid gap-10 border-t border-frost/12 py-11 sm:grid-cols-3 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
             <div className="sm:col-span-3 lg:col-span-1">
               <Link href="/" aria-label="Enigma home" className="inline-block">
                 <Logo />

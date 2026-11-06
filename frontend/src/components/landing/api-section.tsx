@@ -80,12 +80,12 @@ export function ApiSection() {
     <section id="api" className="section text-frost">
       <Reveal className="shell">
         <div className="text-center">
-          <p className="eyebrow">06 API</p>
+          <p className="eyebrow">04 API</p>
           <h2 className="heading">Three calls, no keys on the server</h2>
           <p className="lede">The server is a proxy. It never holds a key or an answer it could read.</p>
         </div>
 
-        <div ref={box} className="mx-auto mt-16 max-w-[980px] overflow-hidden rounded-[14px] bg-night-2 shadow-[0_0_0_1px_rgb(238_238_238/0.1)] md:mt-24">
+        <div ref={box} className="mx-auto mt-10 max-w-[980px] overflow-hidden rounded-[14px] bg-night-2 shadow-[0_0_0_1px_rgb(238_238_238/0.1)] md:mt-12">
           <div className="relative h-2 overflow-hidden bg-[linear-gradient(90deg,var(--volt),#000_60%,var(--orchid))]" aria-hidden="true">
             <div className="flute absolute inset-0" />
           </div>
