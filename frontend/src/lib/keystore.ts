@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { privateKeyFromEnv } from "./env";
 import { newJobKey, newKeyId } from "./crypto";
 import { withStore, readStore, type DestructionReceipt, type KeyRow } from "./store";
 
@@ -45,9 +46,7 @@ function receiptHash(r: Omit<DestructionReceipt, "receiptHash" | "signer" | "sig
 }
 
 async function signReceipt(hash: string): Promise<{ signer: string; signature: string }> {
-  const oracleKey = process.env.ORACLE_PRIVATE_KEY;
-  if (!oracleKey) throw new Error("ORACLE_PRIVATE_KEY not configured");
-  const wallet = new ethers.Wallet(oracleKey);
+  const wallet = new ethers.Wallet(privateKeyFromEnv("ORACLE_PRIVATE_KEY"));
   return { signer: wallet.address, signature: await wallet.signMessage(ethers.getBytes(hash)) };
 }
 

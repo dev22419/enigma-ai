@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { privateKeyFromEnv } from "./env";
 import { WHITECHAIN_RPC } from "./constants";
 
 const ENIGMA_ABI = [
@@ -66,9 +67,7 @@ export async function getJobOnChain(jobId: number): Promise<OnChainJob> {
 }
 
 function getSigner() {
-  const key = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!key) throw new Error("DEPLOYER_PRIVATE_KEY not configured");
-  return new ethers.Wallet(key, getProvider());
+  return new ethers.Wallet(privateKeyFromEnv("DEPLOYER_PRIVATE_KEY"), getProvider());
 }
 
 export async function createJobOnChain(

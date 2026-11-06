@@ -8,7 +8,7 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { bytes, str, defineSchema } from "@arkiv-network/sdk/schema";
 import { http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import type { Hex } from "viem";
+import { privateKeyFromEnv } from "./env";
 
 // Arkiv entities are PUBLIC. `data` must only ever hold an AES-GCM envelope.
 const schema = defineSchema("enigma-ai.results", {
@@ -26,12 +26,10 @@ function getPublicClient() {
 }
 
 function getWalletClient() {
-  const key = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!key) throw new Error("DEPLOYER_PRIVATE_KEY not configured");
   return createWalletClient({
     chain: getChain(),
     transport: http(),
-    account: privateKeyToAccount(key as Hex),
+    account: privateKeyToAccount(privateKeyFromEnv("DEPLOYER_PRIVATE_KEY")),
   });
 }
 
