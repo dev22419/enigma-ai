@@ -1,0 +1,9 @@
+{
+  "chainId": 1874,
+  "enigmaAI": "0x1CbD8308c5b76Ab724CE4143Fdc67811D44dFd5f",
+  "usdt": "0x7103Cd54837A2E086A2e131617d5D249cc9B7044",
+  "provider": "0x91EE9440981f3775ae734b023ecD034fd7274A99",
+  "oracle": "0x279eBb05E158315Bb92e9749b8BA45c17992B37e",
+  "price": "500000",
+  "timeout": "3600"
+}
