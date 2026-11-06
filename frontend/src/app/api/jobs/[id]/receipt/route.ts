@@ -32,6 +32,7 @@ export async function GET(
       arkivEntityKey: row?.arkivEntityKey ?? null,
       expiresAt: row?.expiresAt ?? null,
       destruction,
+      keyWipe: row?.keyWipe ?? null,
       destructionReceiptValid: destruction ? verifyDestructionReceipt(destruction) : null,
     };
     return NextResponse.json(receipt);
