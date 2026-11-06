@@ -9,13 +9,13 @@ Enigma AI is a B2B API that lets hospitals, law firms, and banks use AI on sensi
 ## How It Works
 
 1. **Upload** — Company sends a sensitive document via API
-2. **Encrypt** — File encrypted by the backend with a per-job key before leaving the device
+2. **Encrypt** — File encrypted server-side with per-job AES-256-GCM key
 3. **Store** — Encrypted file uploaded to 0G Storage (decentralized)
 4. **Pay** — Credit deducted from prepaid USDT balance (Whitechain)
 5. **Process** — AI analyzes the document inside a sealed hardware enclave (0G TEE) — nobody can see the data, not even the machine operator
 6. **Store Result** — AI output stored in Arkiv with a self-destruct timer (5 min to 30 days)
 7. **Receipt** — On-chain compliance receipt generated (tx hash, TEE attestation, expiry)
-8. **Destroy** — Timer expires → data permanently erased. Nothing to breach or subpoena.
+8. **Destroy** — Timer expires → encryption key destroyed → ciphertext becomes cryptographically dead
 
 ## Architecture
 
@@ -33,7 +33,7 @@ Browser → 0G Storage (encrypted files)
 | Payment | Whitechain Sepolia (Chain ID: 1874) |
 | File Storage | 0G Storage (decentralized) |
 | AI Compute | 0G Compute TEE — `0gm-1.0-35b-a3b` (multimodal) |
-| Result Storage | Arkiv Kaolin testnet (Network ID: 60138453025) |
+| Result Storage | Arkiv Rabdi testnet (Chain ID: 7794095) |
 | Smart Contract | Solidity (escrow, jobs, TEE verification) |
 
 ## AI Model
@@ -51,7 +51,7 @@ We do NOT use centralized AI providers (OpenAI, Claude, etc.) — data never tou
 | Sponsor | Prize | Integration |
 |---|---|---|
 | **0G** | $15,000 | Storage (files) + Compute TEE (inference) + 0G's own model |
-| **Arkiv** | $15,000 | Expiring entities — protocol-enforced auto-deletion |
+| **Arkiv** | $4,000 | Expiring entities — protocol-enforced auto-deletion |
 | **Whitechain** | $15,000 | USDT credits + escrow + on-chain compliance receipts |
 
 All three sponsors are **core** to the architecture — remove any one and the project breaks.
@@ -87,7 +87,7 @@ npm run dev
 |---|---|---|
 | 0G Testnet | 16602 | https://evmrpc-testnet.0g.ai |
 | Whitechain Testnet | 1874 | https://rpc.ankr.com/whitechain_testnet |
-| Arkiv Kaolin | 60138453025 | https://kaolin.hoodi.arkiv.network/rpc |
+| Arkiv Rabdi | 7794095 | https://rpc.rabdi.db-chain.testnet.arkiv.network |
 
 **Faucets:**
 - 0G: https://faucet.0g.ai (0.1 tokens/day)
