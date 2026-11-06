@@ -282,7 +282,7 @@ export function neutralFileName(name: string) {
 }
 
 export async function runJob(
-  input: { ttl: number; fileName: string; content: string },
+  input: { ttl: number; fileName: string; content: string; history?: Array<{ role: "user" | "assistant"; content: string }> },
   onStage: (s: Stage) => void,
   onCreated?: (jobId: string) => void,
   payer?: Payer,
@@ -344,6 +344,8 @@ export async function runJob(
             directTee.provider,
             input.content,
             isImage ? input.content : undefined,
+            undefined,
+            input.history,
           );
         } catch (e) {
           if (attempt >= 3) throw e;
@@ -378,7 +380,7 @@ export async function runJob(
       let proxyResult: InferResponse | null = null;
       for (let attempt = 1; !proxyResult; attempt++) {
         try {
-          proxyResult = await post<InferResponse>("/api/infer", { jobId, content: input.content, fileName }, created.accessToken);
+          proxyResult = await post<InferResponse>("/api/infer", { jobId, content: input.content, fileName, history: input.history }, created.accessToken);
         } catch (e) {
           const retryable = e instanceof ApiError && e.status === 502 && attempt < 3;
           if (!retryable) throw e;

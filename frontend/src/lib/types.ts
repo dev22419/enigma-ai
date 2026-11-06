@@ -37,6 +37,7 @@ export interface InferRequest {
   jobId: string;
   content: string;
   fileName: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export interface InferResponse {

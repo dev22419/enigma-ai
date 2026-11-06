@@ -95,11 +95,20 @@ export async function POST(req: NextRequest) {
   try {
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
     const { image, note } = isImage ? splitImageNote(body.content) : { image: undefined, note: undefined };
+    const history = Array.isArray(body.history)
+      ? body.history.filter(
+          (h: unknown): h is { role: "user" | "assistant"; content: string } =>
+            typeof h === "object" && h !== null &&
+            (((h as Record<string, unknown>).role === "user") || ((h as Record<string, unknown>).role === "assistant")) &&
+            typeof (h as Record<string, unknown>).content === "string",
+        )
+      : undefined;
     const inference = await runInference(
       body.content,
       image,
       mimeTypeFromFileName(body.fileName),
-      note
+      note,
+      history,
     );
 
     if (!inference.chatId) {
