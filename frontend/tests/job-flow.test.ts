@@ -187,6 +187,15 @@ async function createAndComplete() {
   return { id, accessToken };
 }
 
+/** A job whose reading failed all three tries: the server fails it on-chain, so it is refundable. */
+async function openFailedJob() {
+  const body = await (await postJob(jobReq)).json();
+  m.inference.mockRejectedValue(new Error("upstream down"));
+  for (let i = 0; i < 3; i++) await inferReq(inferBody);
+  m.inference.mockResolvedValue({ chatId: "chat-1", content: RESULT, provider: "p", requestId: "r", finishReason: "stop" });
+  return body as { jobId: string; accessToken: string };
+}
+
 describe("three-endpoint job flow", () => {
   it("creates a job, runs inference, stores result, and completes on-chain", async () => {
     const createRes = await postJob(jobReq);
@@ -259,24 +268,10 @@ describe("history (#21)", () => {
   });
 
   it("shows a failed job's error and refund state", async () => {
-    const createRes = await postJob(jobReq);
-    const createBody = await createRes.json();
-    const { jobId: id, accessToken } = createBody;
+    const { jobId: id } = await openFailedJob();
+    expect((await readStore()).jobs[id].status).toBe("failed");
 
-    await inferReq(inferBody);
-    m.chain.status = "Pending";
-    m.completeJobOnChain.mockRejectedValueOnce(new Error("chain timeout"));
-    await storeResultReq(id, {
-      encryptedResult: "ENC",
-      resultHash: RESULT_HASH,
-      attestationHash: ATT_HASH,
-      chatId: "chat-1",
-    }, accessToken);
-
-    const store = await readStore();
-    expect(store.jobs[id].status).toBe("failed");
-
-    m.chain = { status: "Pending", deadline: now() - 5 };
+    m.chain = { status: "Failed", deadline: now() + 3000 };
     await refundFailedJobs();
     const job = (await (await history()).json()).jobs[0];
     expect(job.error).toBeTruthy();
@@ -290,41 +285,44 @@ describe("history (#21)", () => {
 });
 
 describe("failure path (#62)", () => {
-  it("records a failed result-store in the local store", async () => {
-    const createRes = await postJob(jobReq);
-    const { jobId: id, accessToken } = await createRes.json();
+  beforeEach(() => {
+    vi.mocked(failJobOnChain).mockClear();
+  });
 
+  it("keeps a job processing, not failed, when storing the result fails after the answer was delivered", async () => {
+    const { jobId: id, accessToken } = await (await postJob(jobReq)).json();
     await inferReq(inferBody);
     m.chain.status = "Pending";
     m.completeJobOnChain.mockRejectedValueOnce(new Error("chain error: 504"));
-    const res = await storeResultReq(id, {
-      encryptedResult: "ENC",
-      resultHash: RESULT_HASH,
-      attestationHash: ATT_HASH,
-      chatId: "chat-1",
-    }, accessToken);
+    const res = await storeResultReq(id, { encryptedResult: "ENC", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "chat-1" }, accessToken);
     expect(res.status).toBe(502);
 
     const s = await readStore();
-    expect(s.jobs[id].status).toBe("failed");
+    expect(s.jobs[id].status).toBe("processing");
     expect(s.jobs[id].error).toBeTruthy();
-    expect(m.completeJobOnChain).toHaveBeenCalled();
+    expect(failJobOnChain).not.toHaveBeenCalled(); // a failed job would be refundable, with the answer already read
+
+    // the browser can retry the same call, and it now succeeds
+    expect((await storeResultReq(id, { encryptedResult: "ENC", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "chat-1" }, accessToken)).status).toBe(200);
+  });
+
+  it("can't be turned into a refund by making the store step fail after reading", async () => {
+    const { jobId: id, accessToken } = await (await postJob(jobReq)).json();
+    await inferReq(inferBody);
+    m.chain.status = "Pending";
+    m.completeJobOnChain.mockRejectedValue(new Error("forced failure"));
+    await storeResultReq(id, { encryptedResult: "ENC", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "chat-1" }, accessToken);
+
+    m.chain = { status: "Pending", deadline: now() - 5 }; // past the deadline: refundable on-chain if nobody completes it
+    expect(await refundFailedJobs()).toEqual([]);
+    expect(m.refundJobOnChain).not.toHaveBeenCalled();
+    m.completeJobOnChain.mockResolvedValue("0xsettletx");
+    m.chain = { status: "Pending", deadline: now() + 3000 };
+    expect(await settleDeliveredJobs(now() + SETTLE_AFTER_SECONDS + 5)).toEqual([id]); // the server takes the payment instead
   });
 
   it("refunds a failed job only after its deadline, and only once", async () => {
-    const createRes = await postJob(jobReq);
-    const { jobId: id, accessToken } = await createRes.json();
-
-    await inferReq(inferBody);
-    m.chain.status = "Pending";
-    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
-    await storeResultReq(id, {
-      encryptedResult: "ENC",
-      resultHash: RESULT_HASH,
-      attestationHash: ATT_HASH,
-      chatId: "chat-1",
-    }, accessToken);
-
+    await openFailedJob();
     m.chain = { status: "Pending", deadline: now() + 1000 };
     expect(await refundFailedJobs()).toEqual([]);
     expect(m.refundJobOnChain).not.toHaveBeenCalled();
@@ -333,46 +331,27 @@ describe("failure path (#62)", () => {
     expect(await refundFailedJobs()).toEqual(["1"]);
     expect(m.refundJobOnChain).toHaveBeenCalledTimes(1);
     expect(m.refundJobOnChain).toHaveBeenCalledWith(1);
-    const job = (await readStore()).jobs["1"];
-    expect(job.refund).toMatchObject({ state: "REFUNDED", txHash: "0xrefundtx" });
+    expect((await readStore()).jobs["1"].refund).toMatchObject({ state: "REFUNDED", txHash: "0xrefundtx" });
 
     expect(await refundFailedJobs()).toEqual([]);
     expect(m.refundJobOnChain).toHaveBeenCalledTimes(1);
   });
 
   it("records a refund someone else already sent, and never refunds a completed job", async () => {
-    const res1 = await postJob(jobReq);
-    const { jobId: id1, accessToken: tok1 } = await res1.json();
-    await inferReq(inferBody);
-    m.chain.status = "Pending";
-    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
-    await storeResultReq(id1, { encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "chat-1" }, tok1);
-
+    const first = await openFailedJob();
     m.chain = { status: "Refunded", deadline: now() - 5 };
     await refundFailedJobs();
-    expect((await readStore()).jobs[id1].refund).toMatchObject({ state: "REFUNDED", txHash: null });
+    expect((await readStore()).jobs[first.jobId].refund).toMatchObject({ state: "REFUNDED", txHash: null });
 
-    const res2 = await postJob(jobReq);
-    const { jobId: id2, accessToken: tok2 } = await res2.json();
-    await inferReq(inferBody);
-    m.chain.status = "Pending";
-    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
-    await storeResultReq(id2, { encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "chat-1" }, tok2);
-
+    const second = await openFailedJob();
     m.chain = { status: "Completed", deadline: now() - 5 };
     await refundFailedJobs();
-    expect((await readStore()).jobs[id2].refund).toMatchObject({ state: "NOT_REQUIRED" });
+    expect((await readStore()).jobs[second.jobId].refund).toMatchObject({ state: "NOT_REQUIRED" });
     expect(m.refundJobOnChain).not.toHaveBeenCalled();
   });
 
   it("retries on the next pass when the refund transaction fails", async () => {
-    const res = await postJob(jobReq);
-    const { jobId: id, accessToken } = await res.json();
-    await inferReq(inferBody);
-    m.chain.status = "Pending";
-    m.completeJobOnChain.mockRejectedValueOnce(new Error("boom"));
-    await storeResultReq(id, { encryptedResult: "E", resultHash: RESULT_HASH, attestationHash: ATT_HASH, chatId: "chat-1" }, accessToken);
-
+    await openFailedJob();
     m.chain = { status: "Pending", deadline: now() - 5 };
     m.refundJobOnChain.mockRejectedValueOnce(new Error("rpc down"));
     expect(await refundFailedJobs()).toEqual([]);
