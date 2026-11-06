@@ -41,7 +41,6 @@ uniform float uEdge[${NL + 1}];     // plate edges, 0..1
 const int NL = ${NL};
 
 float hash(float n) { return fract(sin(n * 127.1 + 11.7) * 43758.5453); }
-float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 // Rainbow without the chartreuse: green is held back so it reads gold, teal and blue like glass dispersion
 vec3 pal(float t) {
   vec3 c = 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
@@ -155,7 +154,6 @@ void main() {
 
   vec2 vv = uv - 0.5;
   col *= 1.0 - 0.5 * dot(vv, vv) * 1.6;
-  col += (hash2(frag + fract(t)) - 0.5) * 0.022;
   gl_FragColor = vec4(col, 1.0);
 }
 `;

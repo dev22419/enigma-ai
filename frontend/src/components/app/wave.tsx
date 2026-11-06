@@ -36,8 +36,6 @@ vec3 ramp(float d) {
   return c;
 }
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   float y = 1.0 - uv.y;
@@ -52,7 +50,6 @@ void main() {
   float d = (y - dip - wave - uLift * 0.44) * squeeze;
 
   vec3 c = ramp(d);
-  c += (hash(gl_FragCoord.xy + fract(t)) - 0.5) * 0.012;
   gl_FragColor = vec4(c, 1.0);
 }
 `;
