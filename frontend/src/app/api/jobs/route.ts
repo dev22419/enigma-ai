@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { TASK_TYPES } from "@/lib/constants";
 import { runInference, getTeeAttestation } from "@/lib/og-inference";
 import { signJobCompletion, hashContent } from "@/lib/oracle-signer";
+import { createJobOnChain, completeJobOnChain, getJobOnChain } from "@/lib/contract";
+import { storeInArkiv } from "@/lib/arkiv";
 import type { CreateJobRequest, CreateJobResponse } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -31,6 +33,10 @@ export async function POST(req: NextRequest) {
 
     const fileHash = hashContent(body.fileContent);
 
+    // 1. Create job on-chain (locks payment from balance)
+    const { jobId, txHash: createTxHash } = await createJobOnChain(fileHash, body.ttl);
+
+    // 2. Run 0G inference with TEE verification
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
     const { chatId, content } = await runInference(
       body.taskType,
@@ -40,6 +46,7 @@ export async function POST(req: NextRequest) {
 
     const resultHash = hashContent(content);
 
+    // 3. Get TEE attestation — refuse to proceed without it
     const attestation = await getTeeAttestation(chatId);
     if (!attestation) {
       return NextResponse.json(
@@ -49,18 +56,41 @@ export async function POST(req: NextRequest) {
     }
     const attestationHash = hashContent(attestation);
 
-    // TODO: call contract.createJob on-chain once contract is deployed
-    // TODO: store in Arkiv with TTL
-    // TODO: call contract.completeJob with oracle signature
+    // 4. Read on-chain job to get user + fileHash for signing
+    const onChainJob = await getJobOnChain(jobId);
 
-    const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // 5. Oracle signs the completion (EIP-712)
+    const signature = await signJobCompletion({
+      jobId: BigInt(jobId),
+      user: onChainJob.user,
+      fileHash: onChainJob.fileHash,
+      resultHash,
+      attestationHash,
+    });
+
+    // 6. Complete job on-chain (releases payment to provider)
+    const completeTxHash = await completeJobOnChain(
+      jobId,
+      resultHash,
+      attestationHash,
+      signature
+    );
+
+    // 7. Store result in Arkiv with TTL
+    let arkivKey: string | null = null;
+    try {
+      arkivKey = await storeInArkiv(`job-${jobId}`, content, body.ttl);
+    } catch {
+      // Arkiv storage is best-effort — job is already completed on-chain
+    }
+
     const now = Math.floor(Date.now() / 1000);
 
     const response: CreateJobResponse = {
-      jobId,
+      jobId: String(jobId),
       status: "completed",
       result: content,
-      txHash: null,
+      txHash: completeTxHash,
       attestationHash,
       expiresAt: now + body.ttl,
     };
