@@ -1,7 +1,7 @@
 // AI-assisted: Used Claude to write this file.
 "use client";
 
-import { House, LayoutGrid, SquarePen } from "lucide-react";
+import { House, LayoutGrid, Play, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -75,6 +75,7 @@ function Sidebar() {
 
   const nav: [string, string, typeof House, boolean][] = [
     ["/chat", "Home", House, path === "/chat" || path.startsWith("/job")],
+    ["/demo", "Demo", Play, path === "/demo"],
     ["/dashboard", "Ledger", LayoutGrid, path === "/dashboard"],
   ];
 
