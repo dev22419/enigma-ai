@@ -67,6 +67,8 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     mapping(address => uint256) public balances;
     mapping(uint256 => Job) private _jobs;
     mapping(address => bool) public isSigner;
+    /// @notice Hash of the backend's signed key-destruction receipt, kept off-chain. Zero until recorded.
+    mapping(uint256 => bytes32) public keyDestructionReceipt;
 
     event Deposited(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
@@ -84,6 +86,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     );
     event JobFailed(uint256 indexed jobId, string reason);
     event JobExpired(uint256 indexed jobId);
+    event JobKeyDestroyed(uint256 indexed jobId, bytes32 receiptHash);
     event JobRefunded(uint256 indexed jobId, address indexed user, uint256 amount);
     event SignerAdded(address indexed signer);
     event SignerRemoved(address indexed signer);
@@ -96,6 +99,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     error InsufficientBalance();
     error InvalidExpiry();
     error InvalidJobStatus();
+    error InvalidReceipt();
     error JobNotExpired();
     error ReasonTooLong();
     error NotJobOwner();
@@ -243,6 +247,24 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
         if (!_resultExpired(job)) revert JobNotExpired();
         job.status = Status.Expired;
         emit JobExpired(jobId);
+    }
+
+    /// @notice A registered signer attests that the job's encryption key was destroyed.
+    ///         The contract cannot observe this itself; it trusts the signer, as it does for the result.
+    ///         A job whose lifetime has ended is moved through Expired automatically.
+    /// @param receiptHash hash of the signed destruction receipt; the receipt itself stays off-chain
+    function markKeyDestroyed(uint256 jobId, bytes32 receiptHash) external onlySigner {
+        Job storage job = _jobs[jobId];
+        if (receiptHash == bytes32(0)) revert InvalidReceipt();
+        if (job.status == Status.Completed) {
+            if (!_resultExpired(job)) revert JobNotExpired();
+            emit JobExpired(jobId);
+        } else if (job.status != Status.Expired) {
+            revert InvalidJobStatus();
+        }
+        job.status = Status.KeyDestroyed;
+        keyDestructionReceipt[jobId] = receiptHash;
+        emit JobKeyDestroyed(jobId, receiptHash);
     }
 
     function _resultExpired(Job storage job) private view returns (bool) {
