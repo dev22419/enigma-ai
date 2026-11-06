@@ -9,10 +9,15 @@ Enigma AI's promise is that results are deleted, and that the deletion is not so
   assuming the requested TTL, so the countdown in the UI shows what the network will enforce.
 - **It matches the product's shape.** A result is short-lived data with a chosen lifetime, from minutes
   to 30 days. Per-entity expiry is the primitive this needs; a general-purpose store makes us build it.
-- **Pairs with key destruction.** Arkiv removes the stored ciphertext; our key store removes the key at
-  the same moment. Either one alone already makes the result unreadable.
+- **Pairs with browser-side key destruction.** Arkiv removes the stored ciphertext; the browser wipes the
+  encryption key from `sessionStorage` at the same moment. Either one alone already makes the result
+  unreadable. Together, they provide defense in depth — even if one mechanism fails, the other still
+  protects the data.
+- **Zero-storage backend stays zero-storage.** Because Arkiv handles expiring storage, the backend never
+  needs to persist encrypted results itself. It writes ciphertext to Arkiv and forgets about it. This
+  keeps the backend stateless for result data.
 
 Without Arkiv we would need our own database plus a deletion job and a promise that it ran. With it, the
 "forgets by design" claim for the stored result rests on a public network rather than on our word.
-Limits are listed in `friction.md` and in the security notes (data is public until it expires, so it is
-stored encrypted).
+Limits are listed in `friction.md` and in `docs/SECURITY.md` (data is public until it expires, so it is
+stored encrypted with a key that never leaves the browser).

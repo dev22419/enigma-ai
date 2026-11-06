@@ -2,21 +2,32 @@
 
 Where the Enigma AI team used AI tools while building this project for ETHGlobal Mumbai, as the event rules require. It lists the files where AI use is declared or recorded, and how the team directed it.
 
-Checked against `master` at `455a902` and open PRs #16 and #23 on 2026-11-06.
+Checked against `master` at `9f46fb6` and branch `feat/zero-storage-proxy` (PR #26) on 2026-11-06.
 
 ## Summary
 
 - **How the team worked:** team members set the direction, reviewed the code and ran the live tests. AI assisted the work.
 - **Tools on record:** Claude Code.
-- **Where it helped:** drafting tests, specific backend and contract changes, and UI work in the open PRs.
+- **Where it helped:** drafting tests, backend and contract changes, the zero-storage proxy refactor, Arkiv/Whitechain deliverables, and UI work in the open PRs.
 - **Spec workflows:** none. The repo has no OpenSpec, Kiro or spec-kit files.
 - **Runtime AI is separate:** the 0G model that Enigma calls for inference is part of the product, not a development tool.
 
 ## How the team directed AI
 
+### Zero-storage proxy refactor (PR #26)
+
+Dev Patel directed Claude Code through these changes:
+
+- Pivot the backend from server-side encryption to a zero-storage proxy model where the browser handles all encryption via Web Crypto API.
+- Split the monolithic `POST /api/jobs` into three endpoints: create job, infer via TEE proxy, store encrypted result.
+- Add per-job access tokens with timing-safe comparison for authorizing subsequent API calls.
+- Remove all backend key creation, destruction, and expiry worker code from routes.
+- Strip key state fields from receipt, history, and job detail responses.
+- Update types.ts with new request/response interfaces for the three-endpoint split.
+
 ### UI
 
-Dev mondal and Rudra led the design and directed Claude Code through these instructions:
+Dev Mondal and Rudra led the design and directed Claude Code through these instructions:
 
 - Build the landing page from the team's product brief, with a hero that avoids generic AI visuals.
 - Make the other sections understandable for newcomers and experts, without overdoing them.
@@ -35,6 +46,16 @@ The record for this work is on GitHub:
 - **Review:** PR #3 fixed findings from a contract review. Dev Patel posted a five-finding review on PR #16.
 - **Live testing:** Parth Soni posted a live run of the job flow on PR #11, across Whitechain testnet, 0G and Arkiv. It found a history-scan failure the mocked tests had not caught, and listed what the run didn't cover.
 - **Scope:** Parth closed PR #10 as out of scope for that sprint.
+
+### Documentation
+
+Dev Patel directed Claude Code to write:
+
+- Arkiv deliverables (`arkiv/schema.md`, `friction.md`, `why-arkiv.md`, `how-you-use-arkiv.md`, `reach.md`)
+- Whitechain feedback (`WHITECHAIN_FEEDBACK.md`)
+- Security properties document (`docs/SECURITY.md`)
+- README updates for the browser-side encryption model
+- This AI usage disclosure
 
 ## How to read this file
 
@@ -74,6 +95,36 @@ The PR changed these files:
 - `frontend/src/app/api/jobs/route.ts`
 - `frontend/src/lib/arkiv.ts`
 - `frontend/src/lib/og-inference.ts`
+
+## Zero-storage proxy refactor (PR #26)
+
+These files were written or rewritten with AI assistance during the browser-side encryption pivot:
+
+| File | What AI did |
+|---|---|
+| `frontend/src/app/api/jobs/route.ts` | Rewrote to accept `{encryptedFile, fileHash}` from browser |
+| `frontend/src/app/api/infer/route.ts` | New file: TEE proxy endpoint |
+| `frontend/src/app/api/jobs/[id]/result/route.ts` | New file: accept encrypted result, store on Arkiv |
+| `frontend/src/app/api/jobs/[id]/route.ts` | Rewrote to return ciphertext as-is |
+| `frontend/src/app/api/jobs/[id]/receipt/route.ts` | Removed key destruction dependency |
+| `frontend/src/app/api/history/route.ts` | Removed key state fields |
+| `frontend/src/app/api/cron/expire/route.ts` | Simplified to refund worker only |
+| `frontend/src/instrumentation.ts` | Simplified to refund worker only |
+| `frontend/src/lib/crypto.ts` | Added `randomToken()` and `tokensEqual()` |
+| `frontend/src/lib/store.ts` | Added `accessToken` field to `JobRow` |
+| `frontend/src/lib/types.ts` | New request/response types for three-endpoint split |
+
+## Documentation (PR #26)
+
+| File | What AI did |
+|---|---|
+| `docs/AI_USAGE.md` | Updated for zero-storage proxy refactor |
+| `docs/SECURITY.md` | Drafted security properties and limitations |
+| `arkiv/schema.md` | Updated for browser-side encryption model |
+| `arkiv/how-you-use-arkiv.md` | Updated for browser-side encryption model |
+| `arkiv/reach.md` | New file: Arkiv reach deliverable |
+| `WHITECHAIN_FEEDBACK.md` | New file: Whitechain prize feedback |
+| `README.md` | Updated for browser-side encryption model |
 
 ## UI in open PRs
 
