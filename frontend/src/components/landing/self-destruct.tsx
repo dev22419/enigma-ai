@@ -18,12 +18,6 @@ const OPTIONS = [
 const SIM = 9; // seconds to play a whole lifespan
 const REST = 2600; // pause on "destroyed" before it plays again
 
-const RESULT = [
-  ["Key obligations", "Supplier must give 90 days' notice before ending the agreement."],
-  ["Unusual clause", "Clause 14.2 caps liability at one month of fees."],
-  ["Renewal", "Renews automatically each year unless cancelled 60 days before."],
-];
-
 /** 5x7 LED glyphs, one string per row. */
 const FONT: Record<string, string[]> = {
   "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
@@ -40,14 +34,6 @@ const FONT: Record<string, string[]> = {
   d: ["00001", "00001", "01101", "10011", "10001", "10011", "01101"],
   " ": ["000", "000", "000", "000", "000", "000", "000"],
 };
-
-/** Eats a string as time runs out. Stable per character, so it decays instead of flickering. */
-function decay(text: string, amount: number) {
-  const glyphs = "0123456789abcdef";
-  return [...text]
-    .map((c, i) => (c !== " " && ((i * 37 + text.length * 11) % 100) / 100 < amount ? glyphs[(i * 7) % 16] : c))
-    .join("");
-}
 
 function clock(sec: number) {
   const s = Math.max(0, Math.ceil(sec));
@@ -155,12 +141,12 @@ export function SelfDestruct() {
     <section id="lifespan" className="section text-frost">
       <Reveal className="shell">
         <div className="text-center">
-          <p className="eyebrow">03 Lifespan</p>
+          <p className="eyebrow">02 Lifespan</p>
           <h2 className="heading">You choose when the answer dies</h2>
           <p className="lede">Set a timer from one minute to 30 days. When it hits zero, the answer can&rsquo;t be read by anyone.</p>
         </div>
 
-        <div ref={box} className="panel mt-14 overflow-hidden md:mt-20">
+        <div ref={box} className="panel mt-10 overflow-hidden md:mt-12">
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-frost/10 px-5 py-3">
             <p className={cn("font-mono text-[12px]", gone ? "text-orchid-lit" : "text-frost-soft")}>
               {gone ? "key destroyed" : "key destroyed in"}
@@ -186,45 +172,28 @@ export function SelfDestruct() {
               ))}
             </div>
           </div>
-          <div className="h-[clamp(190px,27vw,340px)]">
+          <div className="h-[clamp(150px,17vw,220px)]">
             <LiveCanvas paint={paint} />
           </div>
+          <ul className="grid border-t border-frost/10 sm:grid-cols-3">
+            {status.map((s, i) => (
+              <li key={s.name} className="flex items-center justify-between gap-3 border-frost/10 px-5 py-3 not-first:max-sm:border-t sm:block sm:not-first:border-l">
+                <p className="text-[13.5px] text-frost-soft">{s.name}</p>
+                <p className="flex items-center gap-2 text-[14.5px] font-semibold sm:mt-0.5">
+                  <span
+                    className={cn("size-2 rounded-full transition-colors duration-300", gone ? "bg-orchid" : "bg-volt-lit")}
+                    style={{ transitionDelay: `${i * 160}ms` }}
+                  />
+                  {gone ? s.dead : s.live}
+                </p>
+              </li>
+            ))}
+          </ul>
           <p className="border-t border-frost/10 px-5 py-2.5 font-mono text-[11.5px] text-frost-soft">
             Sample. {OPTIONS[choice].long}, sped up {Math.round(ttl / SIM).toLocaleString("en-US")} times.
           </p>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <div className="panel p-6 md:col-span-2">
-            <h3 className="text-[18px] font-semibold">What the answer looks like over time</h3>
-            <dl className="mt-3">
-              {RESULT.map(([k, v]) => (
-                <div key={k} className="grid gap-1 border-t border-frost/10 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
-                  <dt className="text-[14px] text-frost-soft">{k}</dt>
-                  <dd className={cn("font-mono text-[13px] leading-snug transition-opacity duration-500", gone && "opacity-30")}>{decay(v, 1 - frac)}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <div className="panel p-6">
-            <h3 className="text-[18px] font-semibold">What happens at zero</h3>
-            <ul className="mt-3">
-              {status.map((s, i) => (
-                <li key={s.name} className="border-t border-frost/10 py-3">
-                  <p className="text-[14px] text-frost-soft">{s.name}</p>
-                  <p className="mt-0.5 flex items-center gap-2 text-[15px] font-semibold">
-                    <span
-                      className={cn("size-2 rounded-full transition-colors duration-300", gone ? "bg-orchid" : "bg-volt-lit")}
-                      style={{ transitionDelay: `${i * 160}ms` }}
-                    />
-                    {gone ? s.dead : s.live}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
       </Reveal>
     </section>
   );

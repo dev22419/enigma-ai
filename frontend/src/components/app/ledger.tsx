@@ -127,8 +127,7 @@ export function Ledger() {
     <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-frost/[0.07] pb-4">
         <div>
-          <p className="font-mono text-[11.5px] text-frost-soft">Workspace / Ledger</p>
-          <h1 className="mt-1 text-[24px] font-semibold tracking-[-0.02em]">Ledger</h1>
+          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">Ledger</h1>
         </div>
         <div className="flex items-center gap-3">
           {address && <p className="font-mono text-[12px] text-frost-soft">{short(address, 6, 4)}</p>}

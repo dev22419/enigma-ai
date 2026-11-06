@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 
 type Rgb = readonly [number, number, number];
 
-const BLUE: Rgb = [2, 151, 222];
-const LIT: Rgb = [92, 196, 255];
+const TEAL: Rgb = [53, 184, 173];
+const LIT: Rgb = [127, 220, 210];
 const ORCHID: Rgb = [229, 156, 244];
 const PETAL: Rgb = [242, 200, 248];
 const REST_TIME = 0.6; // the frame thinking-orbs shows for reduced motion
@@ -27,7 +27,7 @@ function paintFrame(ctx: CanvasRenderingContext2D, frame: OrbFrame, design: numb
   for (const d of frame.dots) {
     const near = 1 - d.white;
     const side = clamp(0.5 + (d.x / design - 0.5) * 1.5 + drift);
-    const base = side < 0.5 ? mix(LIT, BLUE, side * 2) : mix(BLUE, ORCHID, Math.pow((side - 0.5) * 2, 0.75));
+    const base = side < 0.5 ? mix(LIT, TEAL, side * 2) : mix(TEAL, ORCHID, Math.pow((side - 0.5) * 2, 0.75));
     const lit = mix(base, side > 0.6 ? PETAL : LIT, near * near * 0.42);
     const k = 0.5 + 0.5 * Math.sqrt(near);
     ctx.globalAlpha = d.a ?? 1;

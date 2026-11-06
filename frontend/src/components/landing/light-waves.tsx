@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Light waves: wide plates of glass pouring out of the letters of the wordmark toward the viewer.
+ * Light waves: wide plates of glass pouring out from under the wordmark toward the viewer.
  *
  * The fan starts exactly as wide as the title (measured from the DOM, so it follows any font or
  * screen), with a shaft of light under each letter. From there the plates bell outward. Each plate
@@ -41,7 +41,6 @@ uniform float uEdge[${NL + 1}];     // plate edges, 0..1
 const int NL = ${NL};
 
 float hash(float n) { return fract(sin(n * 127.1 + 11.7) * 43758.5453); }
-float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 // Rainbow without the chartreuse: green is held back so it reads gold, teal and blue like glass dispersion
 vec3 pal(float t) {
   vec3 c = 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
@@ -141,14 +140,10 @@ void main() {
   rib += warm * 1.1 * exp(-u * u * 10.0) * exp(-dd * 3.0);
 
   float inFan = 1.0 - smoothstep(0.975, 1.0, abs(u));
-  float below = smoothstep(0.0, 0.006, d);
+  float below = smoothstep(0.0, 0.11, d);                           // no hard top edge under the word
   float r = 1.4 * (1.0 - pow(1.0 - intro, 2.4));
   float emerge = 1.0 - smoothstep(r - 0.35, r, d);                  // light pours out of the letters
   vec3 col = mix(bg, rib, inFan * below * emerge);
-
-  // The line the letters sit on, exactly the width of the title
-  float cut = exp(-pow(c.y * 72.0, 2.0)) * (1.0 - smoothstep(0.88, 1.0, abs(u)));
-  col += warm * 0.9 * cut * smoothstep(0.0, 0.4, intro);
 
   col *= 1.0 - 0.55 * uDive;
 
@@ -159,7 +154,6 @@ void main() {
 
   vec2 vv = uv - 0.5;
   col *= 1.0 - 0.5 * dot(vv, vv) * 1.6;
-  col += (hash2(frag + fract(t)) - 0.5) * 0.022;
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -267,7 +261,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       const visible = Math.max(title.offsetWidth - 2 * pad, 10);
       const cx = o.x + title.offsetWidth / 2;
       anchor.x = cx / W;
-      anchor.y = 1 - (o.y + title.offsetHeight * 0.82) / H; // letters overlap the top of the plates
+      anchor.y = 1 - (o.y + title.offsetHeight + fs * 0.2) / H; // the plates start below the word, descender included
       anchor.half = visible / 2 / H;
       letterEls.slice(0, LETTERS).forEach((el, i) => {
         const lo = offsetIn(el, parent);
@@ -284,7 +278,11 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
     let dive = 0;
     let diveTarget = 0;
     const mouse = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
-    const start = performance.now();
+    // When the eye loader is up, the light waits and pours out as the eye opens
+    let start = document.querySelector(".eye-loader:not(.eye-opening)") ? Infinity : performance.now();
+    const onEye = () => {
+      start = performance.now();
+    };
 
     function resize() {
       if (!canvas || !parent || !gl) return;
@@ -322,7 +320,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       mouse.y += (mouse.ty - mouse.y) * 0.05;
       dive += (diveTarget - dive) * 0.08;
       flow += dt * (1 + 5 * dive); // scrolling rushes the waves toward you
-      draw(Math.min((now - start) / INTRO_MS, 1));
+      draw(Math.max(Math.min((now - start) / INTRO_MS, 1), 0));
     }
 
     function onMove(e: PointerEvent) {
@@ -352,6 +350,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       draw(1);
     } else {
       io.observe(canvas);
+      window.addEventListener("enigma:eye-open", onEye, { once: true });
       window.addEventListener("pointermove", onMove, { passive: true });
       window.addEventListener("scroll", onScroll, { passive: true });
       prev = performance.now();
@@ -362,6 +361,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
+      window.removeEventListener("enigma:eye-open", onEye);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("scroll", onScroll);
       gl.deleteBuffer(buf);

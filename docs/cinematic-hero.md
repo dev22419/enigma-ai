@@ -8,7 +8,7 @@ Dev wanted the landing page to open like a film title: the word Enigma far off a
 
 The old hero (headline, paragraph, buttons, fluted glass background) is gone. The new hero is a full-viewport stage with the light waves, the wordmark, the tagline and the two buttons. The old paragraph and the live job console now sit directly below the stage, so no copy or component was lost.
 
-Everything below the hero is untouched and comes from master as of #53 (Why, Route, SelfDestruct, Certificate, UseCases, ApiSection).
+Below the hero the page now runs Route, SelfDestruct, Certificate and ApiSection. Why and UseCases were removed to shorten the page, and their points live in the hero copy.
 
 ## Files
 

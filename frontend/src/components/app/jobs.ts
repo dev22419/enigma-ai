@@ -869,9 +869,9 @@ export function short(hash: string | null | undefined, a = 6, b = 6) {
 }
 
 export function ttlLabel(s: number) {
-  if (s < 3600) return `${Math.round(s / 60)} min`;
-  if (s < 86400) return `${Math.round(s / 3600)} h`;
-  return `${Math.round(s / 86400)} d`;
+  if (s >= 86400 && s % 86400 === 0) return `${s / 86400} d`;
+  if (s >= 3600 && s % 3600 === 0) return `${s / 3600} h`;
+  return `${Math.round(s / 60)} min`;
 }
 
 export function when(ms: number) {

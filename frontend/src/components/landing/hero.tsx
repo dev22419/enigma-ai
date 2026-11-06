@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { JobConsole } from "./job-console";
 import { LightWaves } from "./light-waves";
 
-/** Where the ribbons are cut, as a fraction of the stage height from the bottom. The wordmark sits on it. */
+/** Where the ribbons are cut, as a fraction of the stage height from the bottom. The wordmark sits just above it. */
 const APEX = 0.76;
 
 export function Hero() {
@@ -60,13 +60,13 @@ export function Hero() {
 
       {/* What it does, shown running */}
       <div className="relative bg-black">
-        <div className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pb-20 text-center sm:px-8 md:pb-28">
+        <div className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pb-14 text-center sm:px-8 md:pb-16">
           <p className="max-w-[40rem] text-[17px] leading-[1.6] text-balance text-frost sm:text-[18px]">
             Upload a medical record, a contract or a bank statement. 0G&rsquo;s model reads it inside a sealed
             enclave, your browser encrypts the answer with a key only it holds, and when your timer runs out the key
             is destroyed. Whitechain keeps a receipt that proves it.
           </p>
-          <div className="relative mt-14 w-full max-w-[880px] text-left md:mt-16">
+          <div className="relative mt-10 w-full max-w-[880px] text-left">
             <JobConsole />
             <p className="mt-3 text-center font-mono text-[11px] text-frost/60">
               A sample job, replayed. Hover to pause, or click a stage.

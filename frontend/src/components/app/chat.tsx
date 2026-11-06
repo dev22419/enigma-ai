@@ -1,15 +1,19 @@
 // AI-assisted: Used Claude to design and write this file.
 "use client";
 
-import { ArrowUp, ChevronDown, FileText, ImageIcon, Loader2, Paperclip, X } from "lucide-react";
+import { BorderBeam } from "border-beam";
+import { ArrowUp, FileText, ImageIcon, Loader2, Paperclip, X } from "lucide-react";
 import Link from "next/link";
+import { useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Popover } from "radix-ui";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { useSignMessage } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { SERVICE_PAID } from "@/lib/client/chain";
+import { MAX_TTL_SECONDS, MIN_TTL_SECONDS } from "@/lib/constants";
 import { withImageNote } from "@/lib/image-note";
 import { cn } from "@/lib/utils";
 import { DotOrb, OrbMark } from "./orb";
@@ -104,6 +108,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
         .sort((a, b) => a.createdAt - b.createdAt),
     [index, threadId, runningIds],
   );
+  // A conversation keeps its document type, so the next message isn't sent as the wrong kind.
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
   useFullWave(empty);
@@ -260,9 +265,9 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
       {empty ? (
         <div className="flex min-h-full flex-1 flex-col px-5 sm:px-8">
-          <div className="rise mx-auto flex w-full max-w-[640px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
+          <div className="rise mx-auto flex w-full max-w-[920px] flex-1 flex-col items-center justify-center pt-10 pb-8 text-center">
             <p className="inline-flex items-center gap-2 rounded-full bg-black/25 py-1 pr-3 pl-1 text-[13px] text-frost/90 backdrop-blur-sm">
-              <span className="rounded-full bg-[#4775e7] px-2 py-0.5 text-[12px] font-medium text-white">Private</span>
+              <span className="rounded-full bg-volt px-2 py-0.5 text-[12px] font-medium text-night">Private</span>
               Encrypted before it leaves your browser
             </p>
             <h1 className="mt-4 text-[clamp(1.75rem,3.2vw,2.5rem)] leading-tight font-semibold tracking-[-0.03em]">What should Enigma read?</h1>
@@ -285,7 +290,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
       ) : (
         <>
           <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-            <div ref={content} className="mx-auto max-w-[680px] space-y-12 px-5 pt-6 pb-10 sm:px-8">
+            <div ref={content} className="mx-auto max-w-[1120px] space-y-12 px-5 pt-6 pb-10 sm:px-8">
               {jobs.map((j) => (
                 <Turn key={j.id} entry={j} out={sent[j.id]} />
               ))}
@@ -296,7 +301,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
             </div>
           </div>
           <div className="shrink-0 px-5 pt-3 pb-5 sm:px-8">
-            <div className="mx-auto max-w-[680px]">{composer}</div>
+            <div className="mx-auto max-w-[1120px]">{composer}</div>
           </div>
         </>
       )}
@@ -306,15 +311,169 @@ export function Chat({ samples }: { samples: Sample[] }) {
 
 /* ================================================================== composer */
 
-function QuietSelect({ value, onChange, label, children }: { value: string | number; onChange: (v: string) => void; label: string; children: ReactNode }) {
+const CUSTOM = -1;
+const WHEEL_ROW = 22;
+const WHEEL_HEIGHT = 46;
+
+/** The lifespan picker: a small wheel with the choice in the middle and its neighbours half out of view. */
+function TimerWheel({ value, onChange, presets }: { value: number; onChange: (ttl: number) => void; presets: { ttl: number; label: string }[] }) {
+  const box = useRef<HTMLDivElement>(null);
+  const lastWheel = useRef(0);
+  const drag = useRef<{ y: number; moved: boolean } | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  // A custom time joins the wheel in order, and "Custom" is always the last stop
+  const timed = presets.some((o) => o.ttl === value) ? presets : [...presets, { ttl: value, label: ttlLabel(value) }].sort((a, b) => a.ttl - b.ttl);
+  const options = [...timed, { ttl: CUSTOM, label: "Custom" }];
+  const index = editing ? options.length - 1 : Math.max(0, options.findIndex((o) => o.ttl === value));
+
+  const step = (by: number) => {
+    const next = Math.min(Math.max(index + by, 0), options.length - 1);
+    if (next === index) return;
+    setEditing(options[next].ttl === CUSTOM);
+    if (options[next].ttl !== CUSTOM) onChange(options[next].ttl);
+  };
+
+  // React's wheel handler is passive, and the page mustn't scroll while the wheel turns
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.timeStamp - lastWheel.current < 110) return;
+      lastWheel.current = e.timeStamp;
+      step(e.deltaY > 0 ? 1 : -1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+
   return (
-    <label className="relative flex min-w-0 items-center gap-1 rounded-full py-1 pr-1 pl-1.5 text-[12.5px] sm:pr-2 sm:pl-2.5 sm:text-[13.5px] text-frost/75 transition-colors hover:bg-frost/[0.06] hover:text-frost">
-      <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-0 cursor-pointer appearance-none truncate bg-transparent pr-4 focus:outline-none [&>option]:bg-night-2">
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-1.5 size-3.5 opacity-60" />
-    </label>
+    <Popover.Root open={editing} onOpenChange={setEditing}>
+      <div className="flex min-w-0 items-center gap-1.5 pl-1 text-[13.5px]">
+        <span className="shrink-0 text-frost/60 max-[419px]:hidden">Destroy after</span>
+        <Popover.Anchor asChild>
+          <div
+            ref={box}
+            role="spinbutton"
+            tabIndex={0}
+            aria-label="Destroy the answer after"
+            aria-valuemin={0}
+            aria-valuemax={options.length - 1}
+            aria-valuenow={index}
+            aria-valuetext={options[index]?.label}
+            title="Scroll to change the time"
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                step(e.key === "ArrowDown" ? 1 : -1);
+              }
+            }}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              drag.current = { y: e.clientY, moved: false };
+            }}
+            onPointerMove={(e) => {
+              const d = drag.current;
+              if (!d || Math.abs(e.clientY - d.y) < WHEEL_ROW * 0.7) return;
+              step(e.clientY < d.y ? 1 : -1);
+              drag.current = { y: e.clientY, moved: true };
+            }}
+            onPointerUp={(e) => {
+              const d = drag.current;
+              drag.current = null;
+              if (!d || d.moved) return;
+              // A tap on a half-hidden neighbour picks it
+              const r = e.currentTarget.getBoundingClientRect();
+              const y = e.clientY - r.top;
+              if (y < r.height * 0.3) step(-1);
+              else if (y > r.height * 0.7) step(1);
+            }}
+            className="relative shrink-0 cursor-ns-resize touch-none overflow-hidden rounded-[10px] select-none focus-visible:ring-1 focus-visible:ring-frost/40 focus-visible:outline-none [mask-image:linear-gradient(rgb(0_0_0/0.2),#000_38%,#000_62%,rgb(0_0_0/0.2))]"
+            style={{ height: WHEEL_HEIGHT, width: 68 }}
+          >
+            <div className="transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: `translateY(${(WHEEL_HEIGHT - WHEEL_ROW) / 2 - index * WHEEL_ROW}px)` }}>
+              {options.map((o, i) => (
+                <div key={o.ttl} className={cn("grid place-items-center whitespace-nowrap transition-colors", i === index ? "font-medium text-frost" : "text-frost/55")} style={{ height: WHEEL_ROW }}>
+                  {o.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Popover.Anchor>
+      </div>
+      <Popover.Portal>
+        <Popover.Content
+          side="bottom"
+          align="start"
+          sideOffset={10}
+          collisionPadding={10}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            box.current?.focus();
+          }}
+          className="app-theme z-50 rounded-[16px] bg-[#282826] p-3 text-frost shadow-[0_12px_40px_rgb(0_0_0/0.45),inset_0_0_0_1px_rgb(255_255_255/0.09)]">
+          <CustomTime
+            onDone={(ttl) => {
+              onChange(ttl);
+              setEditing(false);
+            }}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+const UNITS = [
+  { name: "min", seconds: 60 },
+  { name: "hours", seconds: 3600 },
+  { name: "days", seconds: 86400 },
+];
+
+/** A time of your own, inside what the contract accepts: 1 minute to 30 days. */
+function CustomTime({ onDone }: { onDone: (ttl: number) => void }) {
+  const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState(1);
+  const ttl = Number(amount) * UNITS[unit].seconds;
+  const valid = /^\d+$/.test(amount) && ttl >= MIN_TTL_SECONDS && ttl <= MAX_TTL_SECONDS;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) onDone(ttl);
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value.trim())}
+          placeholder="2"
+          aria-label="Custom time"
+          className="num h-8 w-14 rounded-full bg-frost/[0.07] text-center text-[14px] text-frost placeholder:text-frost/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-frost/40"
+        />
+        <div className="flex rounded-full bg-frost/[0.07] p-0.5" role="group" aria-label="Unit">
+          {UNITS.map((u, i) => (
+            <button
+              key={u.name}
+              type="button"
+              aria-pressed={unit === i}
+              onClick={() => setUnit(i)}
+              className={cn("rounded-full px-2.5 py-1 text-[13px] transition-colors", unit === i ? "bg-frost font-medium text-night" : "text-frost/70 hover:text-frost")}
+            >
+              {u.name}
+            </button>
+          ))}
+        </div>
+        <button type="submit" disabled={!valid} className="h-8 rounded-full bg-frost px-3.5 text-[13px] font-medium text-night transition-colors hover:bg-white disabled:bg-frost/15 disabled:text-frost/40">
+          Set
+        </button>
+      </div>
+      {amount && !valid && <p className="mt-2 px-1 text-[12.5px] text-orchid">Pick a time between 1 minute and 30 days.</p>}
+    </form>
   );
 }
 
@@ -339,6 +498,7 @@ function Composer({
 }) {
   const [err, setErr] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const reduce = useReducedMotion();
   const file = useRef<HTMLInputElement>(null);
   const { text, att, ttl } = draft;
 
@@ -401,6 +561,7 @@ function Composer({
   function submit() {
     if (!canSend) return;
     const typed = text.trim();
+    // The document's own words pick the instructions. An image only has its name and the note to go on.
     let out: Outgoing;
     if (att?.kind === "image") {
       out = { label: att.name, content: withImageNote(att.content, typed), fileName: att.name, ttl, text: typed, attachment: att };
@@ -429,101 +590,97 @@ function Composer({
 
   return (
     <div>
-      <div
-        className={cn(
-          "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
-          dragging && "shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1.5px_rgb(255_255_255/0.5)]",
-        )}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          attach(e.dataTransfer.files?.[0]);
-        }}
-      >
-        {att && (
-          <div className="flex items-center gap-2.5 px-4 pt-3.5 text-[13px]">
-            {att.src ? <Thumb src={att.src} className="size-11" /> : <FileText className="size-4 text-volt-lit" />}
-            <span className="min-w-0 truncate text-frost/90">{att.name}</span>
-            <span className="shrink-0 text-frost-soft/70">{kb(att.bytes)}</span>
-            <button
-              onClick={() => {
-                setErr(null);
-                setDraft((d) => ({ ...d, att: null }));
-              }}
-              aria-label="Remove attachment"
-              className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-frost-soft hover:bg-frost/10 hover:text-frost"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-        <label htmlFor="msg" className="sr-only">
-          Message
-        </label>
-        <textarea
-          id="msg"
-          ref={areaRef}
-          rows={1}
-          value={text}
-          onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
-          onKeyDown={onKey}
-          onPaste={onPaste}
-          placeholder={parsing ? "Reading document…" : att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste or attach a document (PDF, DOCX, XLSX, text, image)"}
-          className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
-        />
-        <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
-          <button
-            onClick={() => file.current?.click()}
-            disabled={parsing}
-            className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost disabled:opacity-50"
-            aria-label="Attach a file"
-            title="PDF, DOCX, XLSX, text, or image"
-          >
-            {parsing ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
-          </button>
-          <QuietSelect label="Destroy the answer after" value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: Number(v) }))}>
-            {LIFESPANS.map((o) => (
-              <option key={o.ttl} value={o.ttl}>
-                Destroy after {o.label}
-              </option>
-            ))}
-          </QuietSelect>
-          {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
-          {gate.kind === "connect" ? (
-            <ConnectPill className="ml-auto" />
-          ) : (
-            <button
-              onClick={submit}
-              disabled={!canSend}
-              aria-label="Send"
-              title={busy ? "Enigma is still working on your last message" : undefined}
-              className={cn(
-                "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
-                gate.kind === "ok" && gate.price ? "max-sm:ml-auto" : "ml-auto",
-              )}
-            >
-              <ArrowUp className="size-4" strokeWidth={2.4} />
-            </button>
+      <BorderBeam borderRadius={16} colorVariant="ocean" active={!reduce}>
+        <div
+          className={cn(
+            "rounded-[16px] bg-[#282826] shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.07)] transition-shadow focus-within:shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1px_rgb(255_255_255/0.2)]",
+            dragging && "shadow-[0_12px_40px_rgb(0_0_0/0.3),inset_0_0_0_1.5px_rgb(255_255_255/0.5)]",
           )}
-        </div>
-        <input
-          ref={file}
-          type="file"
-          className="sr-only"
-          accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx,.doc,.xlsx,.xls,text/*"
-          onChange={(e) => {
-            attach(e.target.files?.[0]);
-            e.target.value = "";
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
           }}
-        />
-      </div>
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            attach(e.dataTransfer.files?.[0]);
+          }}
+        >
+          {att && (
+            <div className="flex items-center gap-2.5 px-4 pt-3.5 text-[13px]">
+              {att.src ? <Thumb src={att.src} className="size-11" /> : <FileText className="size-4 text-volt-lit" />}
+              <span className="min-w-0 truncate text-frost/90">{att.name}</span>
+              <span className="shrink-0 text-frost-soft/70">{kb(att.bytes)}</span>
+              <button
+                onClick={() => {
+                  setErr(null);
+                  setDraft((d) => ({ ...d, att: null }));
+                }}
+                aria-label="Remove attachment"
+                className="ml-auto grid size-6 shrink-0 place-items-center rounded-full text-frost-soft hover:bg-frost/10 hover:text-frost"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+          <label htmlFor="msg" className="sr-only">
+            Message
+          </label>
+          <textarea
+            id="msg"
+            ref={areaRef}
+            rows={1}
+            value={text}
+            onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
+            onKeyDown={onKey}
+            onPaste={onPaste}
+            placeholder={parsing ? "Reading document…" : att?.kind === "image" ? "Ask something about this image (optional)" : att ? "Add a note (optional)" : "Paste or attach a document (PDF, DOCX, XLSX, text, image)"}
+            className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] leading-relaxed text-frost placeholder:text-frost/30 focus:outline-none"
+          />
+          <div className="flex items-center gap-0.5 px-2 pb-2.5 sm:gap-1.5 sm:px-2.5">
+            <button
+              onClick={() => file.current?.click()}
+              disabled={parsing}
+              className="grid size-8 shrink-0 place-items-center rounded-full text-frost/70 transition-colors hover:bg-frost/[0.06] hover:text-frost disabled:opacity-50"
+              aria-label="Attach a file"
+              title="PDF, DOCX, XLSX, text, or image"
+            >
+              {parsing ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
+            </button>
+            <TimerWheel value={ttl} onChange={(v) => setDraft((d) => ({ ...d, ttl: v }))} presets={LIFESPANS} />
+            {gate.kind === "ok" && gate.price && <span className="num mr-2 ml-auto text-[12px] text-frost-soft/60 max-sm:hidden">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
+            {gate.kind === "connect" ? (
+              <ConnectPill className="ml-auto" />
+            ) : (
+              <button
+                onClick={submit}
+                disabled={!canSend}
+                aria-label="Send"
+                title={busy ? "Enigma is still working on your last message" : undefined}
+                className={cn(
+                  "grid size-8 shrink-0 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-orchid disabled:bg-frost/15 disabled:text-frost/40",
+                  gate.kind === "ok" && gate.price ? "max-sm:ml-auto" : "ml-auto",
+                )}
+              >
+                <ArrowUp className="size-4" strokeWidth={2.4} />
+              </button>
+            )}
+          </div>
+          <input
+            ref={file}
+            type="file"
+            className="sr-only"
+            accept=".txt,.md,.csv,.json,.log,.xml,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx,.doc,.xlsx,.xls,text/*"
+            onChange={(e) => {
+              attach(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </BorderBeam>
       {gate.kind === "ok" && gate.price && (
         <p className="num mt-2 px-1 text-[12px] text-frost-soft/60 sm:hidden">
           {gate.price} USDT{left !== null ? `, ${left} left` : ""}
@@ -638,7 +795,7 @@ function Reply({ id }: { id: string }) {
             aria-hidden="true"
           />
           <span
-            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-orchid shadow-[0_0_10px_#e59cf4]" : "bg-volt-lit shadow-[0_0_10px_#5cc4ff]")}
+            className={cn("absolute left-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full", late ? "bg-orchid shadow-[0_0_10px_#e59cf4]" : "bg-volt-lit shadow-[0_0_10px_#7fdcd2]")}
             style={{ top: `calc(0.25rem + (100% - 0.5rem) * ${frac})` }}
             aria-hidden="true"
           />
@@ -685,7 +842,7 @@ function Reply({ id }: { id: string }) {
       {gone && (
         <div className="relative pl-5">
           <span className="absolute top-1 bottom-1 left-0 w-px bg-orchid/40" aria-hidden="true" />
-          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
+          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/40">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
           <Meta>
             <span className="text-orchid">
               Key wiped{vm.destruction ? ` at ${new Date(vm.destruction.destructionTimestamp * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}. Nobody can read this again.
@@ -700,7 +857,7 @@ function Reply({ id }: { id: string }) {
       {vm.phase === "locked" && (
         <div className="relative pl-5">
           <span className="absolute top-1 bottom-1 left-0 w-px bg-frost/15" aria-hidden="true" />
-          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/20">{vm.ciphertextPreview ?? "Encrypted answer"}</p>
+          <p className="font-mono text-[12px] leading-relaxed break-all text-frost/40">{vm.ciphertextPreview ?? "Encrypted answer"}</p>
           <Meta>
             <span className="text-frost/70">The key for this answer was kept in the browser session that sent it, and this one doesn&rsquo;t have it.</span>
           </Meta>

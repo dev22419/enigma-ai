@@ -27,15 +27,6 @@ const STEPS: { node: NodeId; wire: string | null; title: string; text: string }[
   { node: "chain", wire: "M890 210 C760 90 600 72 430 72", title: "Prove", text: "Whitechain records the hashes, so the job can be checked later." },
 ];
 
-const ACCESS: { id: NodeId; cells: number[] }[] = [
-  { id: "browser", cells: [2, 2, 2, 2] },
-  { id: "chain", cells: [0, 0, 0, 2] },
-  { id: "storage", cells: [0, 0, 0, 0] },
-  { id: "compute", cells: [1, 1, 0, 0] },
-  { id: "arkiv", cells: [0, 0, 0, 0] },
-];
-const COLUMNS = ["Document", "Answer", "Key", "Hashes"];
-
 export function Route() {
   const [step, setStep] = useState(0);
   const [picked, setPicked] = useState(false);
@@ -80,12 +71,12 @@ export function Route() {
     <section id="route" className="section text-frost">
       <Reveal className="shell">
         <div className="text-center">
-          <p className="eyebrow">02 How it works</p>
+          <p className="eyebrow">01 How it works</p>
           <h2 className="heading">Where your document goes</h2>
           <p className="lede">Six steps across five systems. Each one gets only what its part needs.</p>
         </div>
 
-        <div ref={box} className="panel mt-14 overflow-hidden md:mt-20">
+        <div ref={box} className="panel mt-10 overflow-hidden md:mt-12">
           {/* Wide layout: the wired diagram */}
           <div className="dot-floor relative hidden aspect-[1000/420] lg:block">
             <svg viewBox="0 0 1000 420" className="absolute inset-0 size-full" aria-hidden="true">
@@ -110,7 +101,7 @@ export function Route() {
                   key={id}
                   className={cn(
                     "absolute w-[164px] -translate-x-1/2 -translate-y-1/2 rounded-[10px] border bg-night-2 px-3.5 py-3 transition-all duration-300",
-                    on ? "border-volt-lit shadow-[0_0_0_4px_rgb(255_154_124/0.14),0_0_34px_rgb(229_156_244/0.4)]" : "border-frost/14",
+                    on ? "border-volt-lit shadow-[0_0_0_4px_rgb(229_156_244/0.14)]" : "border-frost/14",
                   )}
                   style={{ left: `${n.x}%`, top: `${n.y}%` }}
                 >
@@ -163,44 +154,6 @@ export function Route() {
           </p>
         </div>
 
-        <div className="panel mt-3 overflow-x-auto p-5 sm:p-7">
-          <div className="min-w-[520px]">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-              <h3 className="text-[18px] font-semibold">Who can read what</h3>
-              <p className="flex gap-5 font-mono text-[11px] text-frost-soft">
-                <span><i className="mr-1.5 inline-block size-2 rounded-full bg-frost" />Can read</span>
-                <span><i className="mr-1.5 inline-block size-2 rounded-full bg-volt-lit" />Sealed, in the enclave</span>
-              </p>
-            </div>
-            <div className="mt-5 grid grid-cols-[1.5fr_repeat(4,1fr)] items-center gap-y-1 text-center text-[14px]">
-              <span />
-              {COLUMNS.map((c) => (
-                <span key={c} className="pb-2 font-mono text-[11.5px] text-frost-soft">{c}</span>
-              ))}
-              {ACCESS.map((row) => {
-                const on = current.node === row.id;
-                return (
-                  <div key={row.id} className="contents">
-                    <span className={cn("rounded-l-[8px] py-2.5 pl-3 text-left transition-colors duration-300", on ? "bg-frost/8 font-semibold text-frost" : "text-frost/80")}>
-                      {NODES[row.id].name}
-                    </span>
-                    {row.cells.map((v, i) => (
-                      <span key={i} className={cn("flex h-full items-center justify-center transition-colors duration-300", on && "bg-frost/8", i === 3 && "rounded-r-[8px]")}>
-                        <i
-                          className={cn(
-                            "block size-3 rounded-full transition-transform duration-300",
-                            v === 2 ? "bg-frost" : v === 1 ? "bg-volt-lit" : "border border-frost/20",
-                            on && v > 0 && "scale-125",
-                          )}
-                        />
-                      </span>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </Reveal>
     </section>
   );
