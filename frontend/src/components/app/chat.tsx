@@ -6,9 +6,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { useSignMessage } from "wagmi";
+
 import { Button } from "@/components/ui/button";
+import { SERVICE_PAID } from "@/lib/client/chain";
 import { cn } from "@/lib/utils";
 import { EnclaveOrb, OrbMark } from "./orb";
+import { ConnectPill, useGate, type Gate } from "./wallet";
 import {
   ApiError,
   TTL_OPTIONS,
@@ -24,6 +28,7 @@ import {
   useJobVM,
   useNow,
   type IndexEntry,
+  type Payer,
   type Stage,
   type Task,
 } from "./jobs";
@@ -47,6 +52,9 @@ type Attachment = { name: string; content: string; kind: "text" | "image"; bytes
 type Outgoing = { label: string; content: string; fileName: string; task: Task; ttl: number; text: string; attachment: Attachment | null };
 type Pending = { key: string; thread: string; out: Outgoing; started: number; stage: Stage; error: ApiError | null; jobId?: string };
 type Draft = { text: string; att: Attachment | null; task: Task; ttl: number };
+
+/** The balance changes when a job is paid for; ask the wallet box to re-read it once the chain has caught up. */
+const refreshCreditSoon = () => setTimeout(() => window.dispatchEvent(new Event("enigma:credit")), 1500);
 
 /** Wall-clock time for event handlers (kept out of render). */
 const stamp = () => Date.now();
@@ -100,6 +108,9 @@ export function Chat({ samples }: { samples: Sample[] }) {
   );
   const threadPreview = preview || jobs.some((j) => j.preview);
   const empty = jobs.length === 0 && pending.length === 0;
+  // Real jobs are paid from the connected wallet's balance, by its signature. Previews and demo mode skip this.
+  const { gate, credit } = useGate(threadPreview);
+  const { signMessageAsync } = useSignMessage();
 
   // Follow the conversation as it grows (new messages, answers arriving), unless you've scrolled up to read.
   const scroller = useRef<HTMLDivElement>(null);
@@ -136,14 +147,19 @@ export function Chat({ samples }: { samples: Sample[] }) {
       return;
     }
     try {
+      const payer: Payer | undefined =
+        gate.kind === "ok" && gate.address && gate.price ? { address: gate.address, price: gate.price, sign: (message) => signMessageAsync({ message }) } : undefined;
+      if (!payer && !SERVICE_PAID) throw new ApiError("Connect a wallet with credit to send.", 0);
       const res = await runJob(
         { taskType: out.task, ttl: out.ttl, fileName: out.fileName, content: out.content },
         (stage) => setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
         (jobId) => {
           setPending((p) => p.map((x) => (x.key === key ? { ...x, jobId } : x)));
-          remember({ id: jobId, fileName: out.label, task: out.task, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t });
+          remember({ id: jobId, fileName: out.label, task: out.task, ttl: out.ttl, createdAt: stamp(), expiresAt: null, preview: false, thread: t, user: payer?.address.toLowerCase() });
         },
+        payer,
       );
+      refreshCreditSoon();
       remember({
         id: res.jobId,
         fileName: out.label,
@@ -179,6 +195,8 @@ export function Chat({ samples }: { samples: Sample[] }) {
       setDraft={setDraft}
       areaRef={composerRef}
       busy={pending.some((p) => !p.error)}
+      gate={gate}
+      left={credit.left}
       roomy={empty}
       onSend={(o) => {
         send(o);
@@ -198,7 +216,7 @@ export function Chat({ samples }: { samples: Sample[] }) {
         )}
         <span className="ml-auto flex shrink-0 items-center gap-2 text-[12px] text-frost-soft/70 max-sm:hidden">
           <span className="size-1.5 rounded-full bg-volt-lit shadow-[0_0_8px_#5cc4ff]" />
-          0gm-1.0-35b-a3b, sealed enclave
+          0gm-1.0-35b-a3b, sealed enclave{SERVICE_PAID ? ", demo mode" : ""}
         </span>
       </header>
 
@@ -267,6 +285,8 @@ function Composer({
   setDraft,
   onSend,
   busy,
+  gate,
+  left,
   roomy,
   areaRef,
 }: {
@@ -274,6 +294,8 @@ function Composer({
   setDraft: React.Dispatch<React.SetStateAction<Draft>>;
   onSend: (o: Outgoing) => void;
   busy: boolean;
+  gate: Gate;
+  left: number | null;
   roomy: boolean;
   areaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
@@ -295,7 +317,8 @@ function Composer({
     try {
       let next: Attachment;
       if (IMAGE_EXT.test(f.name)) {
-        const content = await readAsDataUrl(f);
+        // The API wants the image as raw base64 (it builds the data URL itself), not a full data URL.
+        const content = (await readAsDataUrl(f)).replace(/^data:[^,]*,/, "");
         if (content.length > MAX_CHARS) throw new Error("big");
         next = { name: f.name, content, kind: "image", bytes: f.size };
       } else if (TEXT_EXT.test(f.name) || f.type.startsWith("text/")) {
@@ -312,7 +335,7 @@ function Composer({
     }
   }
 
-  const canSend = !busy && (!!att || text.trim().length > 0);
+  const canSend = !busy && gate.kind === "ok" && (!!att || text.trim().length > 0);
 
   function submit() {
     if (!canSend) return;
@@ -394,14 +417,22 @@ function Composer({
               </option>
             ))}
           </QuietSelect>
-          <button
-            onClick={submit}
-            disabled={!canSend}
-            aria-label="Send"
-            className="ml-auto grid size-8 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-melon disabled:bg-frost/15 disabled:text-frost/40"
-          >
-            <ArrowUp className="size-4" strokeWidth={2.4} />
-          </button>
+          {gate.kind === "ok" && gate.price && <span className="num ml-auto mr-2 text-[12px] text-frost-soft/60">{gate.price} USDT{left !== null ? `, ${left} left` : ""}</span>}
+          {gate.kind === "connect" ? (
+            <ConnectPill className="ml-auto" />
+          ) : (
+            <button
+              onClick={submit}
+              disabled={!canSend}
+              aria-label="Send"
+              className={cn(
+                "grid size-8 place-items-center rounded-full bg-frost text-night transition-[background-color,opacity] hover:bg-melon disabled:bg-frost/15 disabled:text-frost/40",
+                !(gate.kind === "ok" && gate.price) && "ml-auto",
+              )}
+            >
+              <ArrowUp className="size-4" strokeWidth={2.4} />
+            </button>
+          )}
         </div>
         <input
           ref={file}
@@ -419,6 +450,17 @@ function Composer({
           {err}
         </p>
       )}
+      {gate.kind === "credit" && (
+        <p className="mt-2 px-1 text-[13px] text-melon">
+          Your credit is {Number(gate.balance).toFixed(2)} USDT and a message costs {gate.price}.{" "}
+          <Link href="/dashboard" className="underline decoration-melon/40 underline-offset-4">
+            Add credit
+          </Link>
+        </p>
+      )}
+      {gate.kind === "checking" && <p className="mt-2 px-1 text-[13px] text-frost-soft/70">Checking your credit…</p>}
+      {gate.kind === "error" && <p className="mt-2 px-1 text-[13px] text-melon">Couldn&rsquo;t read your credit: {gate.message}</p>}
+      {gate.kind === "connect" && roomy && <p className="mt-2 px-1 text-[13px] text-frost-soft/70">Connect a wallet to send. Each message is paid from your prepaid USDT balance.</p>}
     </div>
   );
 }
@@ -576,7 +618,7 @@ function Reply({ id }: { id: string }) {
   );
 }
 
-const STAGES: Stage[] = ["encrypt", "create", "infer", "seal", "store"];
+const STAGES: Stage[] = SERVICE_PAID ? ["encrypt", "create", "infer", "seal", "store"] : ["encrypt", "authorize", "create", "infer", "seal", "store"];
 
 function Working({ started, stage }: { started: number; stage?: Stage }) {
   const now = useNow();
