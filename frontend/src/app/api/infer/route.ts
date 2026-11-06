@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TASK_TYPES } from "@/lib/constants";
-import { runInference, getTeeAttestation } from "@/lib/og-inference";
+import { runInference, getTeeAttestation, mimeTypeFromFileName } from "@/lib/og-inference";
 import { hashContent } from "@/lib/oracle-signer";
 import { safeErrorMessage } from "@/lib/redact";
 import type { InferRequest, InferResponse } from "@/lib/types";
@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
     const inference = await runInference(
       body.taskType,
       body.content,
-      isImage ? body.content : undefined
+      isImage ? body.content : undefined,
+      mimeTypeFromFileName(body.fileName)
     );
 
     if (!inference.chatId) {
