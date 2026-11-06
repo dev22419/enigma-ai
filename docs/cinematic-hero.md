@@ -18,7 +18,7 @@ Everything below the hero is untouched and comes from master as of #53 (Why, Rou
 | `frontend/src/components/landing/hero.tsx` | Rewritten. Stage, wordmark, tagline, buttons, credits row, then the old paragraph and `JobConsole`. |
 | `frontend/src/app/globals.css` | Appended a block at the end: `.enigma-title`, `.enigma-rise`, `.enigma-tick` and their keyframes. |
 
-Not touched: `site-nav.tsx` and the `.glass-nav` styles, the `/dashboard` ledger, anything under `app/(app)`, `lib/`, API types, `.env`. `fluted-glass.tsx` is no longer used by the hero but is still in the repo, in case another surface wants it.
+Not touched: `site-nav.tsx` and the `.glass-nav` styles, the `/dashboard` ledger, anything under `app/(app)`, `lib/`, API types, `.env`.
 
 ## How the effect works
 
