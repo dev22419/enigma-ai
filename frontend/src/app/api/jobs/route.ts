@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const fileHash = hashContent(body.fileContent);
 
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
-    const { chatId, content } = await runInference(
+    const { chatId, content, provider, requestId } = await runInference(
       body.taskType,
       body.fileContent,
       isImage ? body.fileContent : undefined
@@ -40,13 +40,8 @@ export async function POST(req: NextRequest) {
 
     const resultHash = hashContent(content);
 
-    const attestation = await getTeeAttestation(chatId);
-    if (!attestation) {
-      return NextResponse.json(
-        { error: "TEE attestation unavailable — cannot verify inference integrity" },
-        { status: 502 }
-      );
-    }
+    // Build TEE attestation record from 0G trace data
+    const attestation = await getTeeAttestation(chatId, provider, requestId);
     const attestationHash = hashContent(attestation);
 
     // TODO: call contract.createJob on-chain once contract is deployed
