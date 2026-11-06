@@ -65,7 +65,7 @@ export function JobConsole({ className }: { className?: string }) {
       <div className="flex items-center justify-between gap-3 border-b border-night-line px-4 py-3">
         <div className="flex items-baseline gap-3 font-mono text-[11.5px]">
           <span className="text-frost">Job 1042</span>
-          <span className="text-frost-soft">medical, deleted after 60 s</span>
+          <span className="text-frost-soft">deleted after 60 s</span>
         </div>
         <StatusChip stage={s} />
       </div>

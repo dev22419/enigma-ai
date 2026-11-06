@@ -77,7 +77,6 @@ describe("direct TEE inference", () => {
     await runDirectInference(
       broker as never,
       provider,
-      "medical",
       "Patient report: blood pressure 140/90",
     );
 
@@ -90,7 +89,7 @@ describe("direct TEE inference", () => {
     // The body should include the system prompt (built browser-side)
     const body = JSON.parse(init.body as string);
     expect(body.messages[0].role).toBe("system");
-    expect(body.messages[0].content).toContain("clinical document analyst");
+    expect(body.messages[0].content).toContain("document analyst");
 
     // Auth headers come from the broker, not from our backend's access token
     const headers = init.headers as Record<string, string>;
@@ -120,7 +119,6 @@ describe("direct TEE inference", () => {
     await runDirectInference(
       broker as never,
       provider,
-      "legal",
       "Confidential contract between Party A and Party B",
     );
 
@@ -147,7 +145,7 @@ describe("direct TEE inference", () => {
     const { runDirectInference } = await import("@/lib/client/direct-tee");
     const broker = mockBroker();
 
-    await runDirectInference(broker as never, provider, "financial", "Q3 revenue: 4.2 crore");
+    await runDirectInference(broker as never, provider, "Q3 revenue: 4.2 crore");
 
     const body = JSON.parse((fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     expect(body.verify_tee).toBe(true);
@@ -175,7 +173,6 @@ describe("direct TEE inference", () => {
     await runDirectInference(
       broker as never,
       provider,
-      "medical",
       "ignored-text",
       "BASE64DATA",
       "image/png"
@@ -206,7 +203,7 @@ describe("direct TEE inference", () => {
     const { runDirectInference } = await import("@/lib/client/direct-tee");
     const broker = mockBroker();
 
-    await runDirectInference(broker as never, provider, "medical", "test doc");
+    await runDirectInference(broker as never, provider, "test doc");
 
     expect(broker.inference.processResponse).toHaveBeenCalledTimes(1);
     expect(broker.inference.processResponse).toHaveBeenCalledWith(

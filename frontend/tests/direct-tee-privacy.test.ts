@@ -144,7 +144,7 @@ describe("PRIVACY PROOF: backend never receives plaintext in direct mode", () =>
     const broker = mockBroker();
 
     await runJob(
-      { taskType: "medical", ttl: 3600, fileName: "patient-report.txt", content: SENSITIVE_DOCUMENT },
+      { ttl: 3600, fileName: "patient-report.txt", content: SENSITIVE_DOCUMENT },
       () => {},
       () => {},
       undefined, // no payer (service-paid mode or testing)
@@ -181,7 +181,7 @@ describe("PRIVACY PROOF: backend never receives plaintext in direct mode", () =>
     const broker = mockBroker();
 
     await runJob(
-      { taskType: "medical", ttl: 3600, fileName: "report.txt", content: SENSITIVE_DOCUMENT },
+      { ttl: 3600, fileName: "report.txt", content: SENSITIVE_DOCUMENT },
       () => {},
       () => {},
       undefined,
@@ -195,7 +195,7 @@ describe("PRIVACY PROOF: backend never receives plaintext in direct mode", () =>
 
     // System prompt was built in the browser, not by the backend
     expect(body.messages[0].role).toBe("system");
-    expect(body.messages[0].content).toContain("clinical document analyst");
+    expect(body.messages[0].content).toContain("document analyst");
 
     // The document content is in the user message
     expect(body.messages[1].role).toBe("user");
@@ -210,7 +210,7 @@ describe("PRIVACY PROOF: backend never receives plaintext in direct mode", () =>
     const broker = mockBroker();
 
     await runJob(
-      { taskType: "legal", ttl: 3600, fileName: "contract.txt", content: SENSITIVE_DOCUMENT },
+      { ttl: 3600, fileName: "contract.txt", content: SENSITIVE_DOCUMENT },
       () => {},
       () => {},
       undefined,
@@ -228,7 +228,7 @@ describe("PRIVACY PROOF: backend never receives plaintext in direct mode", () =>
     const { runJob } = await import("@/components/app/jobs");
 
     await runJob(
-      { taskType: "medical", ttl: 3600, fileName: "report.txt", content: SENSITIVE_DOCUMENT },
+      { ttl: 3600, fileName: "report.txt", content: SENSITIVE_DOCUMENT },
       () => {},
       () => {},
       undefined,
@@ -252,7 +252,7 @@ describe("PRIVACY PROOF: backend never receives plaintext in direct mode", () =>
     const broker = mockBroker();
 
     await runJob(
-      { taskType: "financial", ttl: 3600, fileName: "statement.txt", content: SENSITIVE_DOCUMENT },
+      { ttl: 3600, fileName: "statement.txt", content: SENSITIVE_DOCUMENT },
       () => {},
       () => {},
       undefined,

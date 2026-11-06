@@ -1,7 +1,7 @@
 // AI-assisted: Used Claude to design and write this file.
 "use client";
 
-import { FileText, X } from "lucide-react";
+import { FileText } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -10,7 +10,6 @@ import { useAccount } from "wagmi";
 import { loadWipeReceipt } from "@/lib/client/vault";
 import { DepositFlow, WalletBox, useMounted } from "./wallet";
 import { cn } from "@/lib/utils";
-import { TaskChip } from "./bits";
 import { ApiError, countdown, forgetAll, getBalance, knownAddress, localPhase, short, ttlLabel, useIndex, useNow, type Phase } from "./jobs";
 
 type HistoryJob = {
@@ -28,7 +27,6 @@ type HistoryJob = {
 type Row = {
   id: string;
   fileName: string;
-  task: string | null;
   ttl: number;
   expiresAt: number | null;
   phase: Phase;
@@ -36,32 +34,6 @@ type Row = {
   tx: string | null;
   verified: boolean | null;
 };
-
-/** One tile per task type the API accepts, each lit with one colour from the palette. */
-const FOLDERS = [
-  { key: "medical", name: "Medical", tone: "#0297de" },
-  { key: "legal", name: "Legal", tone: "#e59cf4" },
-  { key: "financial", name: "Financial", tone: "#eaf3f9" },
-];
-
-function Folder({ tone, id }: { tone: string; id: string }) {
-  return (
-    <svg viewBox="0 0 120 92" className="h-[76px] w-auto" aria-hidden="true">
-      <defs>
-        <linearGradient id={`front-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={tone} stopOpacity="0.5" />
-          <stop offset="1" stopColor={tone} stopOpacity="0.08" />
-        </linearGradient>
-      </defs>
-      <path d="M6 18a8 8 0 0 1 8-8h28l10 10h54a8 8 0 0 1 8 8v54a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8Z" fill="#17181a" />
-      <rect x="20" y="4" width="62" height="56" rx="5" fill="#f2f5f7" transform="rotate(-5 50 30)" />
-      <rect x="30" y="16" width="34" height="3.5" rx="1.75" fill="#02070a" opacity="0.28" transform="rotate(-5 47 18)" />
-      <rect x="31" y="25" width="24" height="3.5" rx="1.75" fill="#02070a" opacity="0.18" transform="rotate(-5 43 27)" />
-      <path d="M6 42a8 8 0 0 1 8-8h92a8 8 0 0 1 8 8v40a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8Z" fill="#101113" />
-      <path d="M6 42a8 8 0 0 1 8-8h92a8 8 0 0 1 8 8v40a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8Z" fill={`url(#front-${id})`} stroke="#ffffff" strokeOpacity="0.14" />
-    </svg>
-  );
-}
 
 function StatusPill({ row, now }: { row: Row; now: number }) {
   const readable = row.phase === "readable";
@@ -89,7 +61,6 @@ export function Ledger() {
   const [balance, setBalance] = useState<{ balance: string; queryPrice: string; queriesRemaining: number } | null>(null);
   const [history, setHistory] = useState<HistoryJob[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string | null>(null);
   const [loads, setLoads] = useState(0);
 
   useEffect(() => {
@@ -134,16 +105,16 @@ export function Ledger() {
       const exp = h.expiresAt ? h.expiresAt * 1000 : null;
       const phase: Phase =
         h.status === "Refunded" ? "refunded" : loadWipeReceipt(String(h.jobId)) || (exp && now >= exp) ? "destroyed" : h.status === "Completed" ? "readable" : h.error ? "failed" : "working";
-      return { id: String(h.jobId), fileName: e?.fileName ?? `Job ${h.jobId}`, task: e?.task ?? null, ttl: h.expirySeconds, expiresAt: exp, phase, preview: false, tx: h.completeTxHash, verified: h.destruction?.valid ?? null };
+      return { id: String(h.jobId), fileName: e?.fileName ?? `Job ${h.jobId}`, ttl: h.expirySeconds, expiresAt: exp, phase, preview: false, tx: h.completeTxHash, verified: h.destruction?.valid ?? null };
     }),
     ...index
       .filter((e) => e.preview || !onChain)
-      .map((e): Row => ({ id: e.id, fileName: e.fileName, task: e.task, ttl: e.ttl, expiresAt: e.expiresAt, phase: localPhase(e, now), preview: e.preview, tx: null, verified: null })),
+      .map((e): Row => ({ id: e.id, fileName: e.fileName, ttl: e.ttl, expiresAt: e.expiresAt, phase: localPhase(e, now), preview: e.preview, tx: null, verified: null })),
   ].sort((a, b) => (b.expiresAt ?? 0) - (a.expiresAt ?? 0));
 
   const live = rows.filter((r) => r.phase === "readable" || r.phase === "working");
   const destroyed = rows.filter((r) => r.phase === "destroyed").length;
-  const shown = filter ? rows.filter((r) => r.task === filter) : rows;
+  const shown = rows;
 
   const stats: [string, string, string, string][] = [
     ["Prepaid balance", credit ? Number(credit.balance).toFixed(2) : "–", "USDT", ""],
@@ -188,56 +159,21 @@ export function Ledger() {
 
       <div className="mt-7 grid gap-7 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold">Document types</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {FOLDERS.map((f) => {
-              const all = rows.filter((r) => r.task === f.key);
-              const open = all.filter((r) => r.phase === "readable").length;
-              const on = filter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(on ? null : f.key)}
-                  aria-pressed={on}
-                  className={cn(
-                    "rounded-[14px] bg-[#242424]/70 p-4 text-left backdrop-blur-md shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] transition-shadow hover:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.2)]",
-                    on && "shadow-[inset_0_0_0_1px_rgb(255_255_255/0.5)]",
-                  )}
-                >
-                  <Folder tone={f.tone} id={f.key} />
-                  <p className="mt-3 text-[14.5px] font-semibold">{f.name}</p>
-                  <p className="mt-0.5 font-mono text-[11.5px] text-frost-soft">
-                    {all.length} {all.length === 1 ? "job" : "jobs"}, {open} readable
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-7 flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold">Recent jobs</h2>
-            {filter && (
-              <button onClick={() => setFilter(null)} className="flex items-center gap-1 text-[12.5px] text-frost-soft hover:text-frost">
-                <X className="size-3.5" /> Clear filter
-              </button>
-            )}
-          </div>
+          <h2 className="text-[15px] font-semibold">Recent jobs</h2>
 
           {shown.length === 0 ? (
             <div className="mt-3 rounded-[14px] border border-dashed border-frost/15 p-8 text-center">
-              <p className="text-[15px]">{filter ? "No jobs of this type in this list." : "No jobs yet."}</p>
-              {!filter && (
-                <Button asChild className="mt-4">
-                  <Link href="/chat">Start one</Link>
-                </Button>
-              )}
+              <p className="text-[15px]">No jobs yet.</p>
+              <Button asChild className="mt-4">
+                <Link href="/chat">Start one</Link>
+              </Button>
             </div>
           ) : (
             <div className="mt-3 overflow-x-auto rounded-[14px] bg-[#242424]/70 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] backdrop-blur-md">
               <table className="w-full min-w-[40rem] text-left text-[13.5px]">
                 <thead className="text-[12px] text-frost-soft">
                   <tr>
-                    {["Document", "Task", "Lifespan", "Status", "Receipt"].map((h) => (
+                    {["Document", "Lifespan", "Status", "Receipt"].map((h) => (
                       <th key={h} className="px-4 py-3 font-normal">
                         {h}
                       </th>
@@ -253,9 +189,6 @@ export function Ledger() {
                           <span className="min-w-0 truncate">{r.fileName}</span>
                           <span className="shrink-0 font-mono text-[11px] text-frost-soft">{r.preview ? "Preview" : `#${r.id}`}</span>
                         </Link>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <TaskChip task={r.task} className="text-frost-soft" />
                       </td>
                       <td className="px-4 py-2.5 font-mono text-[12px] text-frost-soft">{r.ttl ? ttlLabel(r.ttl) : ""}</td>
                       <td className="px-4 py-2.5">

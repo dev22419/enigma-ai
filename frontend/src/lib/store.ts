@@ -15,7 +15,6 @@ export interface KeyRow {
 
 export interface JobRow {
   jobId: string;
-  taskType: string;
   fileName: string;
   fileHash: string;
   inputCiphertextHash: string | null;

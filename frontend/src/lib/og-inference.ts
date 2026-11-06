@@ -1,7 +1,7 @@
 // All 0G requests use X-0G-Provider-Trust-Mode: private, which routes exclusively
 // to TeeML providers (Intel TDX enclaves). The 0G router returns 503 rather than
 // silently falling back to a non-TEE provider.
-import { ZG_API_URL, ZG_FALLBACK_MODEL, ZG_MODEL, SYSTEM_PROMPTS, type TaskType } from "./constants";
+import { ZG_API_URL, ZG_FALLBACK_MODEL, ZG_MODEL, SYSTEM_PROMPT } from "./constants";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -37,7 +37,6 @@ export function mimeTypeFromFileName(fileName: string): string {
 }
 
 export async function runInference(
-  taskType: TaskType,
   fileContent: string,
   imageBase64?: string,
   mimeType = "image/png",
@@ -47,7 +46,7 @@ export async function runInference(
   if (!apiKey) throw new Error("ZG_API_KEY not configured");
 
   const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM_PROMPTS[taskType] },
+    { role: "system", content: SYSTEM_PROMPT },
   ];
 
   if (imageBase64) {
