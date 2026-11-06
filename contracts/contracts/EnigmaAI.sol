@@ -152,14 +152,25 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
     /// @param fileHash content hash of the encrypted file stored on 0G Storage
     /// @param expirySeconds lifetime of the result in Arkiv (1 minute to 30 days)
     function createJob(bytes32 fileHash, uint32 expirySeconds) external returns (uint256 jobId) {
+        return _createJob(msg.sender, fileHash, expirySeconds);
+    }
+
+    /// @notice A signer creates a job on behalf of a user, debiting the user's prepaid balance.
+    /// @param user the company wallet whose balance pays for the job
+    function createJobFor(address user, bytes32 fileHash, uint32 expirySeconds) external onlySigner returns (uint256 jobId) {
+        if (user == address(0)) revert ZeroAddress();
+        return _createJob(user, fileHash, expirySeconds);
+    }
+
+    function _createJob(address user, bytes32 fileHash, uint32 expirySeconds) private returns (uint256 jobId) {
         if (expirySeconds < MIN_EXPIRY || expirySeconds > MAX_EXPIRY) revert InvalidExpiry();
         uint256 price = queryPrice;
-        if (balances[msg.sender] < price) revert InsufficientBalance();
+        if (balances[user] < price) revert InsufficientBalance();
 
-        balances[msg.sender] -= price;
+        balances[user] -= price;
         jobId = nextJobId++;
         _jobs[jobId] = Job({
-            user: msg.sender,
+            user: user,
             status: Status.Pending,
             createdAt: uint64(block.timestamp),
             deadline: uint64(block.timestamp) + jobTimeout,
@@ -171,7 +182,7 @@ contract EnigmaAI is Ownable, ReentrancyGuard, EIP712 {
             attestationHash: bytes32(0)
         });
 
-        emit JobCreated(jobId, msg.sender, fileHash, price, expirySeconds);
+        emit JobCreated(jobId, user, fileHash, price, expirySeconds);
     }
 
     /// @notice A registered signer acknowledges a job and marks it as being processed.

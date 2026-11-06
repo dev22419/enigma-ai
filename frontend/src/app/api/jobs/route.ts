@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(body.ttl) || body.ttl < MIN_TTL_SECONDS || body.ttl > MAX_TTL_SECONDS) {
     return fail(400, `ttl must be a whole number of seconds between ${MIN_TTL_SECONDS} and ${MAX_TTL_SECONDS}`);
   }
+  if (body.userAddress !== undefined && (typeof body.userAddress !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(body.userAddress))) {
+    return fail(400, "userAddress must be a valid Ethereum address");
+  }
 
   const problems = configProblems();
   if (problems.length) return fail(503, `Server is not configured: ${problems.join("; ")}`);
@@ -49,7 +52,7 @@ export async function POST(req: NextRequest) {
   let jobId: number;
   let createTxHash: string;
   try {
-    ({ jobId, txHash: createTxHash } = await createJobOnChain(body.fileHash, body.ttl));
+    ({ jobId, txHash: createTxHash } = await createJobOnChain(body.fileHash, body.ttl, body.userAddress));
   } catch (err) {
     return fail(502, `Could not create the job on-chain: ${safeErrorMessage(err)}`);
   }
