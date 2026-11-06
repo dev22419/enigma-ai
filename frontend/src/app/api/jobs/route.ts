@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TASK_TYPES, MIN_TTL_SECONDS, MAX_TTL_SECONDS } from "@/lib/constants";
-import { runInference, getTeeAttestation } from "@/lib/og-inference";
+import { runInference, getTeeAttestation, mimeTypeFromFileName } from "@/lib/og-inference";
 import { signJobCompletion, hashContent } from "@/lib/oracle-signer";
 import { createJobOnChain, completeJobOnChain, getJobOnChain } from "@/lib/contract";
 import { storeInArkiv } from "@/lib/arkiv";
@@ -98,7 +98,8 @@ export async function POST(req: NextRequest) {
     // 4. Private inference on 0G with TEE verification.
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
     const inference = await runInference(
-      body.taskType, body.fileContent, isImage ? body.fileContent : undefined
+      body.taskType, body.fileContent, isImage ? body.fileContent : undefined,
+      isImage ? mimeTypeFromFileName(body.fileName) : undefined
     );
     const { chatId, provider, requestId } = inference;
     if (!chatId) return abort(502, "0G returned no request id, so the run cannot be verified");
