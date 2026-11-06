@@ -16,6 +16,7 @@ import { SERVICE_PAID } from "@/lib/client/chain";
 import { MAX_TTL_SECONDS, MIN_TTL_SECONDS } from "@/lib/constants";
 import { withImageNote } from "@/lib/image-note";
 import { cn } from "@/lib/utils";
+import { BurnAway } from "./burn-away";
 import { DotOrb, OrbMark } from "./orb";
 import { useFullWave } from "./wave";
 import { ConnectPill, useGate, walletProblem, type Gate } from "./wallet";
@@ -799,7 +800,7 @@ function Reply({ id }: { id: string }) {
             style={{ top: `calc(0.25rem + (100% - 0.5rem) * ${frac})` }}
             aria-hidden="true"
           />
-          <div className="space-y-5">
+          <BurnAway expiresAt={vm.expiresAt} className="space-y-5">
             {sections(vm.result).map((s, i) => (
               <section key={i}>
                 {s.title && i > 0 && <h3 className="text-[13px] font-semibold text-frost">{s.title}</h3>}
@@ -817,7 +818,7 @@ function Reply({ id }: { id: string }) {
                 )}
               </section>
             ))}
-          </div>
+          </BurnAway>
           <Meta>
             <span className={late ? "text-orchid" : "text-frost/80"}>Key wiped in {countdown(left)}</span>
             {vm.attestationHash && <span>Attested in TDX</span>}
@@ -840,7 +841,7 @@ function Reply({ id }: { id: string }) {
       )}
 
       {gone && (
-        <div className="relative pl-5">
+        <div className="rise relative pl-5">
           <span className="absolute top-1 bottom-1 left-0 w-px bg-orchid/40" aria-hidden="true" />
           <p className="font-mono text-[12px] leading-relaxed break-all text-frost/40">{vm.ciphertextPreview ?? "The encrypted answer has expired from Arkiv as well."}</p>
           <Meta>

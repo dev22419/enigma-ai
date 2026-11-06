@@ -24,15 +24,6 @@ export function Fuse({ frac, className, burning }: { frac: number; className?: s
   );
 }
 
-export function Stamp({ className, sub }: { className?: string; sub?: string }) {
-  return (
-    <div className={cn("stamp-in pointer-events-none rounded-[6px] border-[4px] border-orchid bg-night/40 px-4 py-1.5 text-orchid", className)}>
-      <span className="display narrow block text-[clamp(2rem,4.5vw,3.2rem)] leading-none tracking-[0.02em]">DESTROYED</span>
-      {sub && <span className="mt-1 block text-center font-mono text-[10px] tracking-[0.16em]">{sub}</span>}
-    </div>
-  );
-}
-
 export function TaskChip({ task, className }: { task: string | null; className?: string }) {
   if (!task) return null;
   return (
