@@ -7,6 +7,7 @@ import { SelfDestruct } from "@/components/landing/self-destruct";
 import { SiteFooter } from "@/components/landing/site-footer";
 import { SiteNav } from "@/components/landing/site-nav";
 import { UseCases } from "@/components/landing/use-cases";
+import { Why } from "@/components/landing/why";
 
 export default function Home() {
   return (
@@ -14,6 +15,7 @@ export default function Home() {
       <SiteNav />
       <main className="bg-night">
         <Hero />
+        <Why />
         <Route />
         <SelfDestruct />
         <Certificate />

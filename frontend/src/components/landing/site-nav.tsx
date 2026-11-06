@@ -101,9 +101,9 @@ function useGlassLens(ref: React.RefObject<HTMLElement | null>) {
       filter.setAttribute("height", String(h));
       filter.innerHTML = `<feGaussianBlur in="SourceGraphic" stdDeviation="${(1.6 * k).toFixed(2)}" result="soft"/>
         <feImage x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map" href="${lensMap(w, h, r)}"/>
-        <feDisplacementMap in="soft" in2="map" scale="${(39 * k).toFixed(1)}" xChannelSelector="R" yChannelSelector="G" result="dR"/>
+        <feDisplacementMap in="soft" in2="map" scale="${(32 * k).toFixed(1)}" xChannelSelector="R" yChannelSelector="G" result="dR"/>
         <feDisplacementMap in="soft" in2="map" scale="${(32 * k).toFixed(1)}" xChannelSelector="R" yChannelSelector="G" result="dG"/>
-        <feDisplacementMap in="soft" in2="map" scale="${(25 * k).toFixed(1)}" xChannelSelector="R" yChannelSelector="G" result="dB"/>
+        <feDisplacementMap in="soft" in2="map" scale="${(32 * k).toFixed(1)}" xChannelSelector="R" yChannelSelector="G" result="dB"/>
         <feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
         <feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
         <feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
