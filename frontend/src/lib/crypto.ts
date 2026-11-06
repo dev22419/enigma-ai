@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from "node:crypto";
 
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
@@ -84,4 +84,15 @@ export function serializeEnvelope(env: Envelope): string {
 
 export function parseEnvelope(raw: string): Envelope {
   return JSON.parse(raw) as Envelope;
+}
+
+export function randomToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export function tokensEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
