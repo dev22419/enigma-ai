@@ -280,7 +280,11 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
     let dive = 0;
     let diveTarget = 0;
     const mouse = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
-    const start = performance.now();
+    // When the eye loader is up, the light waits and pours out as the eye opens
+    let start = document.querySelector(".eye-loader:not(.eye-opening)") ? Infinity : performance.now();
+    const onEye = () => {
+      start = performance.now();
+    };
 
     function resize() {
       if (!canvas || !parent || !gl) return;
@@ -318,7 +322,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       mouse.y += (mouse.ty - mouse.y) * 0.05;
       dive += (diveTarget - dive) * 0.08;
       flow += dt * (1 + 5 * dive); // scrolling rushes the waves toward you
-      draw(Math.min((now - start) / INTRO_MS, 1));
+      draw(Math.max(Math.min((now - start) / INTRO_MS, 1), 0));
     }
 
     function onMove(e: PointerEvent) {
@@ -348,6 +352,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       draw(1);
     } else {
       io.observe(canvas);
+      window.addEventListener("enigma:eye-open", onEye, { once: true });
       window.addEventListener("pointermove", onMove, { passive: true });
       window.addEventListener("scroll", onScroll, { passive: true });
       prev = performance.now();
@@ -358,6 +363,7 @@ export function LightWaves({ className, apex = 0.76 }: { className?: string; ape
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
+      window.removeEventListener("enigma:eye-open", onEye);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("scroll", onScroll);
       gl.deleteBuffer(buf);

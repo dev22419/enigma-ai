@@ -371,6 +371,9 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .eye-loader {
+    display: none;
+  }
   .live-dot {
     animation: none;
   }
@@ -541,6 +544,11 @@ body {
 }
 
 /* ---- Cinematic hero: the wordmark far off at the vanishing point ---- */
+/* The hero's entrance waits for the eye loader to open */
+html:has(.eye-loader:not(.eye-opening)) .enigma-title,
+html:has(.eye-loader:not(.eye-opening)) .enigma-rise {
+  animation-play-state: paused;
+}
 .enigma-title {
   /* The same face as the Enigma in the nav */
   font-weight: 600;
