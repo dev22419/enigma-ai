@@ -22,6 +22,7 @@ export interface CreateJobRequest {
   fileName: string;
   fileHash: string;
   encryptedFile: string;
+  userAddress?: string;
 }
 
 export interface CreateJobResponse {
