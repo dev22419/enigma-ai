@@ -37,7 +37,8 @@ export async function runInference(
   taskType: TaskType,
   fileContent: string,
   imageBase64?: string,
-  mimeType = "image/png"
+  mimeType = "image/png",
+  note?: string
 ): Promise<InferenceResult> {
   const apiKey = process.env.ZG_API_KEY;
   if (!apiKey) throw new Error("ZG_API_KEY not configured");
@@ -50,7 +51,9 @@ export async function runInference(
     messages.push({
       role: "user",
       content: [
-        { type: "text", text: "Analyze this document:" },
+        { type: "text", text: note ? `Analyze this document. The sender added this note:
+
+${note}` : "Analyze this document:" },
         {
           type: "image_url",
           image_url: { url: `data:${mimeType};base64,${imageBase64}` },

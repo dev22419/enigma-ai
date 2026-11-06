@@ -93,3 +93,34 @@ describe("model choice", () => {
     expect(a).toMatchObject({ chatId: "chat-1", provider: "0xprovider", requestId: "req-1", verifyTee: true, model: "glm-5.3" });
   });
 });
+
+describe("a note beside an image", () => {
+  const sentText = (f: ReturnType<typeof fetchSequence>) => JSON.parse(String(f.mock.calls[0][1]?.body)).messages[1].content[0].text;
+
+  it("reaches the model with the image", async () => {
+    const { runInference } = await load();
+    const f = fetchSequence(answer());
+    await runInference("medical", "aGk=", "aGk=", "image/png", "Is this dose normal?");
+    expect(sentText(f)).toContain("Is this dose normal?");
+  });
+
+  it("leaves the prompt alone when there is no note", async () => {
+    const { runInference } = await load();
+    const f = fetchSequence(answer());
+    await runInference("medical", "aGk=", "aGk=");
+    expect(sentText(f)).toBe("Analyze this document:");
+  });
+});
+
+describe("image notes in the job content", () => {
+  it("round-trips, and the image comes back clean", async () => {
+    const { splitImageNote, withImageNote } = await import("@/lib/image-note");
+    expect(splitImageNote(withImageNote("aGk=", "line one\nline two"))).toEqual({ image: "aGk=", note: "line one\nline two" });
+  });
+
+  it("changes nothing for an image with no note", async () => {
+    const { splitImageNote, withImageNote } = await import("@/lib/image-note");
+    expect(withImageNote("aGk=", "")).toBe("aGk=");
+    expect(splitImageNote("aGk=")).toEqual({ image: "aGk=" });
+  });
+});
