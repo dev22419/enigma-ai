@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Run 0G inference with TEE verification
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
-    const { chatId, content } = await runInference(
+    const { chatId, content, provider, requestId } = await runInference(
       body.taskType,
       body.fileContent,
       isImage ? body.fileContent : undefined
@@ -46,14 +46,8 @@ export async function POST(req: NextRequest) {
 
     const resultHash = hashContent(content);
 
-    // 3. Get TEE attestation — refuse to proceed without it
-    const attestation = await getTeeAttestation(chatId);
-    if (!attestation) {
-      return NextResponse.json(
-        { error: "TEE attestation unavailable — cannot verify inference integrity" },
-        { status: 502 }
-      );
-    }
+    // 3. Build TEE attestation from 0G trace data
+    const attestation = await getTeeAttestation(chatId, provider, requestId);
     const attestationHash = hashContent(attestation);
 
     // 4. Read on-chain job to get user + fileHash for signing

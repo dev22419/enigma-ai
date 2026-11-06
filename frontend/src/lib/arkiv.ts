@@ -24,8 +24,8 @@ function getPublicClient() {
 }
 
 function getWalletClient() {
-  const key = process.env.ORACLE_PRIVATE_KEY;
-  if (!key) throw new Error("ORACLE_PRIVATE_KEY not configured");
+  const key = process.env.DEPLOYER_PRIVATE_KEY;
+  if (!key) throw new Error("DEPLOYER_PRIVATE_KEY not configured");
   const account = privateKeyToAccount(key as Hex);
   return createWalletClient({
     chain: getChain(),

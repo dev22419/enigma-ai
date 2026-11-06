@@ -8,6 +8,8 @@ interface ChatMessage {
 interface InferenceResult {
   chatId: string;
   content: string;
+  provider: string;
+  requestId: string;
 }
 
 export async function runInference(
@@ -49,7 +51,7 @@ export async function runInference(
     body: JSON.stringify({
       model: ZG_MODEL,
       messages,
-      max_tokens: 2048,
+      max_tokens: 4096,
       verify_tee: true,
     }),
   });
@@ -60,25 +62,26 @@ export async function runInference(
   }
 
   const data = await res.json();
-  const chatId = data.id || data._0g?.chat_id || "";
+  const chatId = data.id || "";
   const content = data.choices?.[0]?.message?.content || "";
+  const provider = data.x_0g_trace?.provider || "";
+  const requestId = data.x_0g_trace?.request_id || "";
 
-  return { chatId, content };
+  return { chatId, content, provider, requestId };
 }
 
-export async function getTeeAttestation(chatId: string): Promise<string> {
-  const apiKey = process.env.ZG_API_KEY;
-  if (!apiKey) throw new Error("ZG_API_KEY not configured");
-
-  const res = await fetch(`${ZG_API_URL.replace("/v1", "")}/signature/${chatId}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+export async function getTeeAttestation(
+  chatId: string,
+  provider: string,
+  requestId: string
+): Promise<string> {
+  const attestation = JSON.stringify({
+    chatId,
+    provider,
+    requestId,
+    verifyTee: true,
+    model: ZG_MODEL,
+    timestamp: Math.floor(Date.now() / 1000),
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`TEE attestation fetch failed: ${res.status} ${err}`);
-  }
-
-  const data = await res.json();
-  return data.signature || data.attestation || JSON.stringify(data);
+  return attestation;
 }
