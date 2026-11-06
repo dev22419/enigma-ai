@@ -5,8 +5,8 @@
 // Usage (from frontend/):  npx tsx scripts/eval-prompts.mts [filter]   (filter = part of a case name, e.g. financial)
 // Needs ZG_API_KEY in ../.env. Uses a little of the 0G API budget (one call per case).
 import { readFileSync } from "node:fs";
-import { runInference } from "../src/lib/og-inference.ts";
-import { SYSTEM_PROMPTS, type TaskType } from "../src/lib/constants.ts";
+import { runInference } from "../src/lib/og-inference";
+import type { TaskType } from "../src/lib/constants";
 
 process.loadEnvFile("../.env");
 const doc = (name: string) => readFileSync(`../docs/demo/${name}`, "utf8");
@@ -51,8 +51,6 @@ const results = await Promise.all(
   selected.map(async (c) => {
     const t0 = Date.now();
     try {
-      // Same prompt text the server uses.
-      void SYSTEM_PROMPTS[c.type];
       const r = await runInference(c.type, doc(c.file));
       return { c, r, ms: Date.now() - t0, err: null as string | null };
     } catch (e) {
