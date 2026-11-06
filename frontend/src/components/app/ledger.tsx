@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { loadWipeReceipt } from "@/lib/client/vault";
 import { cn } from "@/lib/utils";
 import { Fuse, TaskChip } from "./bits";
 import { ApiError, countdown, forgetAll, getBalance, knownAddress, localPhase, short, ttlLabel, useIndex, useNow, type Phase } from "./jobs";
@@ -15,7 +16,6 @@ type HistoryJob = {
   expirySeconds: number;
   payment: string;
   expiresAt: number | null;
-  keyDestroyed: boolean;
   completeTxHash: string | null;
   error: string | null;
   refund: { state: string } | null;
@@ -73,7 +73,7 @@ export function Ledger() {
       const e = byId.get(String(h.jobId));
       const exp = h.expiresAt ? h.expiresAt * 1000 : null;
       const phase: Phase =
-        h.status === "Refunded" ? "refunded" : h.keyDestroyed || (exp && now >= exp) ? "destroyed" : h.status === "Completed" ? "readable" : h.error ? "failed" : "working";
+        h.status === "Refunded" ? "refunded" : loadWipeReceipt(String(h.jobId)) || (exp && now >= exp) ? "destroyed" : h.status === "Completed" ? "readable" : h.error ? "failed" : "working";
       return { id: String(h.jobId), fileName: e?.fileName ?? `Job ${h.jobId}`, task: e?.task ?? null, ttl: h.expirySeconds, expiresAt: exp, phase, preview: false, tx: h.completeTxHash, verified: h.destruction?.valid ?? null };
     }),
     ...index

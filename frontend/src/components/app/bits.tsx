@@ -45,6 +45,7 @@ export function TaskChip({ task, className }: { task: string | null; className?:
 const PHASE: Record<Phase, [string, string]> = {
   working: ["Working", "border-frost/30 text-frost"],
   readable: ["Readable", "border-volt/50 text-volt-lit"],
+  locked: ["Key not in this browser", "border-frost/30 text-frost-soft"],
   destroyed: ["Key destroyed", "border-melon/60 text-melon"],
   failed: ["Failed", "border-melon/60 text-melon"],
   refunded: ["Refunded", "border-frost/30 text-frost-soft"],

@@ -8,10 +8,24 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { Logo } from "@/components/landing/site-nav";
 import { cn } from "@/lib/utils";
-import { countdown, getBalance, knownAddress, localPhase, threadsOf, useIndex, useNow, type Thread } from "./jobs";
+import { countdown, getBalance, knownAddress, localPhase, threadsOf, useIndex, useNow, wipeExpired, type Thread } from "./jobs";
+
+/** Wipes each job's key from this browser the moment its lifespan ends (task #74). */
+function KeyWiper() {
+  const index = useIndex();
+  useEffect(() => {
+    if (!index) return;
+    wipeExpired(index, Date.now());
+    const id = setInterval(() => wipeExpired(index, Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [index]);
+  return null;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
+    <>
+    <KeyWiper />
     <div className="flex min-h-dvh flex-col bg-night text-frost lg:flex-row">
       <Suspense fallback={<aside className="shrink-0 lg:w-[16rem]" />}>
         <Sidebar />
@@ -22,6 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="relative">{children}</div>
       </div>
     </div>
+    </>
   );
 }
 
