@@ -245,4 +245,74 @@ describe("EnigmaAI lifecycle", () => {
       await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
     });
   });
+
+  describe("markKeyDestroyed", () => {
+    const RECEIPT = h("destruction-receipt");
+
+    it("records the receipt hash for an Expired job and emits JobKeyDestroyed", async () => {
+      const { enigma, oracle } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      await enigma.markExpired(1n);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT)).to.emit(enigma, "JobKeyDestroyed").withArgs(1n, RECEIPT);
+      expect((await enigma.getJob(1n)).status).to.equal(Status.KeyDestroyed);
+      expect(await enigma.keyDestructionReceipt(1n)).to.equal(RECEIPT);
+    });
+
+    it("moves a completed job past its lifetime through Expired in one call, emitting both events", async () => {
+      const { enigma, oracle } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT))
+        .to.emit(enigma, "JobExpired").withArgs(1n)
+        .and.to.emit(enigma, "JobKeyDestroyed").withArgs(1n, RECEIPT);
+      expect((await enigma.getJob(1n)).status).to.equal(Status.KeyDestroyed);
+    });
+
+    it("refuses to attest destruction while the result is still alive", async () => {
+      const { enigma, oracle } = await loadFixture(completed);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT)).to.be.revertedWithCustomError(enigma, "JobNotExpired");
+      expect(await enigma.keyDestructionReceipt(1n)).to.equal(ethers.ZeroHash);
+    });
+
+    it("is restricted to registered signers", async () => {
+      const { enigma, company, other, owner } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      for (const who of [company, other, owner]) {
+        await expect(enigma.connect(who).markKeyDestroyed(1n, RECEIPT)).to.be.revertedWithCustomError(enigma, "UnauthorizedSigner");
+      }
+    });
+
+    it("rejects an empty receipt hash, so the flag always carries evidence", async () => {
+      const { enigma, oracle } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, ethers.ZeroHash)).to.be.revertedWithCustomError(enigma, "InvalidReceipt");
+    });
+
+    it("records once only, and the first receipt cannot be overwritten", async () => {
+      const { enigma, oracle } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      await enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, h("other"))).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      expect(await enigma.keyDestructionReceipt(1n)).to.equal(RECEIPT);
+    });
+
+    it("applies only to completed jobs, never to pending, processing, failed, refunded or unknown ones", async () => {
+      const { enigma, oracle } = await loadFixture(withJob);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      await enigma.connect(oracle).startProcessing(1n);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      await enigma.connect(oracle).failJob(1n, "x");
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      await enigma.refundJob(1n);
+      await expect(enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      await expect(enigma.connect(oracle).markKeyDestroyed(99n, RECEIPT)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("leaves a KeyDestroyed job unrefundable and its funds untouched", async () => {
+      const { enigma, usdt, provider, oracle } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      await enigma.connect(oracle).markKeyDestroyed(1n, RECEIPT);
+      await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      expect(await usdt.balanceOf(provider.address)).to.equal(PRICE);
+    });
+  });
 });
