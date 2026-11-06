@@ -45,20 +45,31 @@ describe("buildHistory", () => {
     expect(result[0].content).toBe("[Image document attached]");
   });
 
+  it("caps the first pair's document content when it exceeds 50K chars", () => {
+    const hugeDoc = "x".repeat(100_000);
+    const jobs = [
+      { id: "1", fileName: "big.txt", thread: "t1", createdAt: 100, ttl: 60, expiresAt: null, preview: false },
+    ];
+    const sent = { "1": { content: hugeDoc, label: "big.txt", fileName: "big.txt", task: "medical", ttl: 60, text: "", attachment: null } };
+    const result = buildHistory(jobs, sent, () => "Reply");
+    expect(result[0].content.length).toBeLessThan(60_000);
+    expect(result[0].content).toContain("[Document truncated in history");
+  });
+
   it("truncates oldest non-first turns when history exceeds budget", () => {
-    const bigContent = "x".repeat(100_001);
+    const medContent = "y".repeat(40_000);
     const jobs = [
       { id: "1", fileName: "a.txt", thread: "t1", createdAt: 100, ttl: 60, expiresAt: null, preview: false },
       { id: "2", fileName: "b.txt", thread: "t1", createdAt: 200, ttl: 60, expiresAt: null, preview: false },
       { id: "3", fileName: "c.txt", thread: "t1", createdAt: 300, ttl: 60, expiresAt: null, preview: false },
     ];
     const sent = {
-      "1": { content: bigContent, label: "a", fileName: "a", task: "medical", ttl: 60, text: "", attachment: null },
-      "2": { content: bigContent, label: "b", fileName: "b", task: "medical", ttl: 60, text: "", attachment: null },
-      "3": { content: bigContent, label: "c", fileName: "c", task: "medical", ttl: 60, text: "", attachment: null },
+      "1": { content: medContent, label: "a", fileName: "a", task: "medical", ttl: 60, text: "", attachment: null },
+      "2": { content: medContent, label: "b", fileName: "b", task: "medical", ttl: 60, text: "", attachment: null },
+      "3": { content: medContent, label: "c", fileName: "c", task: "medical", ttl: 60, text: "", attachment: null },
     };
-    const result = buildHistory(jobs, sent, () => "Reply", 200_000);
+    const result = buildHistory(jobs, sent, () => "R".repeat(40_000), 100_000);
     expect(result.length).toBeLessThan(6);
-    expect(result[0].content).toBe(bigContent);
+    expect(result[0].content).toBe(medContent);
   });
 });

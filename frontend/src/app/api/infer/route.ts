@@ -95,7 +95,9 @@ export async function POST(req: NextRequest) {
   try {
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(body.fileName);
     const { image, note } = isImage ? splitImageNote(body.content) : { image: undefined, note: undefined };
-    const history = Array.isArray(body.history)
+    const MAX_HISTORY_ENTRIES = 50;
+    const MAX_HISTORY_CHARS = 200_000;
+    let history = Array.isArray(body.history)
       ? body.history.filter(
           (h: unknown): h is { role: "user" | "assistant"; content: string } =>
             typeof h === "object" && h !== null &&
@@ -103,6 +105,12 @@ export async function POST(req: NextRequest) {
             typeof (h as Record<string, unknown>).content === "string",
         )
       : undefined;
+    if (history) {
+      history = history.slice(0, MAX_HISTORY_ENTRIES);
+      let charTotal = 0;
+      history = history.filter((h) => { charTotal += h.content.length; return charTotal <= MAX_HISTORY_CHARS; });
+      if (history.length === 0) history = undefined;
+    }
     const inference = await runInference(
       body.content,
       image,

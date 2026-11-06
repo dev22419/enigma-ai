@@ -36,6 +36,14 @@ export function buildHistory(
     pairs.push({ user: userContent, assistant: assistantContent });
   }
 
+  const FIRST_PAIR_CAP = 50_000;
+  if (pairs.length > 0 && pairs[0].user.length > FIRST_PAIR_CAP) {
+    pairs[0] = {
+      user: pairs[0].user.slice(0, FIRST_PAIR_CAP) + "\n\n[Document truncated in history — see the assistant's analysis below]",
+      assistant: pairs[0].assistant,
+    };
+  }
+
   let total = 0;
   for (const p of pairs) total += p.user.length + p.assistant.length;
 
