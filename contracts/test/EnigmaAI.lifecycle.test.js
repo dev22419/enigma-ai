@@ -153,4 +153,55 @@ describe("EnigmaAI lifecycle", () => {
       await expect(enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
     });
   });
+
+  describe("refundJob", () => {
+    it("refunds a Failed job immediately, to the user's balance, and only once", async () => {
+      const { enigma, company, other, oracle } = await loadFixture(processing);
+      await enigma.connect(oracle).failJob(1n, "provider timeout");
+      const before = await enigma.balances(company.address);
+      await expect(enigma.connect(other).refundJob(1n)).to.emit(enigma, "JobRefunded").withArgs(1n, company.address, PRICE);
+      expect(await enigma.balances(company.address)).to.equal(before + PRICE);
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Refunded);
+      await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("refunds a Processing job only after the deadline (no funds locked by a vanished signer)", async () => {
+      const { enigma, company } = await loadFixture(processing);
+      await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "JobNotTimedOut");
+      await time.increase(TIMEOUT + 1n);
+      await enigma.refundJob(1n);
+      expect(await enigma.balances(company.address)).to.equal(2_000_000n);
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Refunded);
+    });
+
+    it("still refunds a Pending job only after the deadline", async () => {
+      const { enigma } = await loadFixture(withJob);
+      await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "JobNotTimedOut");
+      await time.increase(TIMEOUT + 1n);
+      await enigma.refundJob(1n);
+    });
+
+    it("refuses Completed, Expired, KeyDestroyed-bound and unknown jobs", async () => {
+      const { enigma } = await loadFixture(completed);
+      await time.increase(TIMEOUT + 1n);
+      await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+      await expect(enigma.refundJob(99n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("cannot complete a job after it was refunded", async () => {
+      const { enigma, company, oracle, domain } = await loadFixture(processing);
+      await time.increase(TIMEOUT + 1n);
+      await enigma.refundJob(1n);
+      const sig = await signComplete(oracle, domain, 1n, company.address);
+      await expect(enigma.completeJob(1n, RESULT_HASH, ATTEST_HASH, sig)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+    });
+
+    it("pays out or refunds a job, never both", async () => {
+      const { enigma, usdt, provider, company, oracle } = await loadFixture(processing);
+      await enigma.connect(oracle).failJob(1n, "failed");
+      await enigma.refundJob(1n);
+      expect(await usdt.balanceOf(provider.address)).to.equal(0n);
+      expect(await enigma.balances(company.address)).to.equal(2_000_000n);
+    });
+  });
 });
