@@ -152,12 +152,17 @@ export async function runDirectInference(
   provider: TeeProvider,
   content: string,
   imageBase64?: string,
-  mimeType = "image/png"
+  mimeType = "image/png",
+  history?: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<DirectInferenceResult> {
   const messages: Array<{
     role: string;
     content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
   }> = [{ role: "system", content: SYSTEM_PROMPT }];
+
+  if (history) {
+    for (const h of history) messages.push({ role: h.role, content: h.content });
+  }
 
   if (imageBase64) {
     messages.push({

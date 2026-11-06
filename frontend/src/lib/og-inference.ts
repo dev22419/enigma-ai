@@ -40,7 +40,8 @@ export async function runInference(
   fileContent: string,
   imageBase64?: string,
   mimeType = "image/png",
-  note?: string
+  note?: string,
+  history?: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<InferenceResult> {
   const apiKey = process.env.ZG_API_KEY;
   if (!apiKey) throw new Error("ZG_API_KEY not configured");
@@ -48,6 +49,10 @@ export async function runInference(
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
   ];
+
+  if (history) {
+    for (const h of history) messages.push({ role: h.role, content: h.content });
+  }
 
   if (imageBase64) {
     messages.push({

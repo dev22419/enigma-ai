@@ -21,6 +21,7 @@ import {
   STAGE_LABEL,
   countdown,
   createPreview,
+  getFresh,
   newThreadId,
   remember,
   runJob,
@@ -34,6 +35,7 @@ import {
   type Payer,
   type Stage,
 } from "./jobs";
+import { buildHistory } from "@/lib/history";
 
 export type Sample = { key: string; label: string; fileName: string; text: string; blurb: string };
 
@@ -185,8 +187,9 @@ export function Chat({ samples }: { samples: Sample[] }) {
       const payer: Payer | undefined =
         gate.kind === "ok" && gate.address && gate.price ? { address: gate.address, price: gate.price, sign: (message) => signMessageAsync({ message }) } : undefined;
       if (!payer && !SERVICE_PAID) throw new ApiError("Connect a wallet with credit to send.", 0);
+      const history = buildHistory(jobs, sent, getFresh);
       const res = await runJob(
-        { ttl: out.ttl, fileName: out.fileName, content: out.content },
+        { ttl: out.ttl, fileName: out.fileName, content: out.content, history },
         (stage) => setPending((p) => p.map((x) => (x.key === key ? { ...x, stage } : x))),
         (jobId) => {
           setPending((p) => p.map((x) => (x.key === key ? { ...x, jobId } : x)));
