@@ -230,7 +230,7 @@ export interface DirectTeeConfig {
 
 const PLAIN_PREFIX = "enigma.plain.";
 
-/** Answers decrypted (or received) in this tab, backed by sessionStorage so a refresh keeps them. */
+/** Answers decrypted (or received), backed by sessionStorage (tab-scoped, auto-cleared on close). */
 const fresh = {
   _mem: new Map<string, string>(),
   get(id: string) {
