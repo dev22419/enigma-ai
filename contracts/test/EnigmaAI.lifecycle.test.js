@@ -181,7 +181,7 @@ describe("EnigmaAI lifecycle", () => {
       await enigma.refundJob(1n);
     });
 
-    it("refuses Completed, Expired, KeyDestroyed-bound and unknown jobs", async () => {
+    it("refuses a Completed job and an unknown job", async () => {
       const { enigma } = await loadFixture(completed);
       await time.increase(TIMEOUT + 1n);
       await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
@@ -202,6 +202,47 @@ describe("EnigmaAI lifecycle", () => {
       await enigma.refundJob(1n);
       expect(await usdt.balanceOf(provider.address)).to.equal(0n);
       expect(await enigma.balances(company.address)).to.equal(2_000_000n);
+    });
+  });
+
+  describe("markExpired", () => {
+    it("is refused while the result is still alive", async () => {
+      const { enigma } = await loadFixture(completed);
+      await expect(enigma.markExpired(1n)).to.be.revertedWithCustomError(enigma, "JobNotExpired");
+    });
+
+    it("moves a completed job to Expired at exactly completedAt + expirySeconds, for anyone", async () => {
+      const { enigma, other } = await loadFixture(completed);
+      const job = await enigma.getJob(1n);
+      const expiresAt = job.completedAt + job.expirySeconds;
+      await time.setNextBlockTimestamp(expiresAt - 1n);
+      await expect(enigma.connect(other).markExpired(1n, { gasLimit: 300_000 })).to.be.revertedWithCustomError(enigma, "JobNotExpired");
+      await time.setNextBlockTimestamp(expiresAt);
+      await expect(enigma.connect(other).markExpired(1n)).to.emit(enigma, "JobExpired").withArgs(1n);
+      expect((await enigma.getJob(1n)).status).to.equal(Status.Expired);
+    });
+
+    it("works once, and only on completed jobs", async () => {
+      const { enigma } = await loadFixture(completed);
+      await time.increase(EXPIRY);
+      await enigma.markExpired(1n);
+      await expect(enigma.markExpired(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
+
+      const pending = await loadFixture(withJob);
+      await time.increase(TIMEOUT + 1n);
+      await expect(pending.enigma.markExpired(1n)).to.be.revertedWithCustomError(pending.enigma, "InvalidJobStatus");
+      await expect(pending.enigma.markExpired(99n)).to.be.revertedWithCustomError(pending.enigma, "InvalidJobStatus");
+    });
+
+    it("never touches funds, and an Expired job can no longer be refunded", async () => {
+      const { enigma, usdt, company } = await loadFixture(completed);
+      const held = await usdt.balanceOf(await enigma.getAddress());
+      const credit = await enigma.balances(company.address);
+      await time.increase(EXPIRY);
+      await enigma.markExpired(1n);
+      expect(await usdt.balanceOf(await enigma.getAddress())).to.equal(held);
+      expect(await enigma.balances(company.address)).to.equal(credit);
+      await expect(enigma.refundJob(1n)).to.be.revertedWithCustomError(enigma, "InvalidJobStatus");
     });
   });
 });
