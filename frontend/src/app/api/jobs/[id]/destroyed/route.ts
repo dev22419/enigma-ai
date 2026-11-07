@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ethers } from "ethers";
 import { markKeyDestroyedOnChain } from "@/lib/contract";
-import { tokensEqual } from "@/lib/crypto";
+import { tokensEqual, deriveAccessToken } from "@/lib/crypto";
 import { readStore, withStore } from "@/lib/store";
 import { safeErrorMessage } from "@/lib/redact";
 import type { KeyWipeRequest, KeyWipeResponse } from "@/lib/types";
@@ -44,10 +44,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const token = req.headers.get("x-access-token") ?? "";
   if (!token) return fail(401, "Missing x-access-token header");
+  const expectedToken = deriveAccessToken(id);
+  if (!tokensEqual(token, expectedToken)) return fail(403, "Invalid access token");
   const row = (await readStore()).jobs[id];
-  if (!row) return fail(404, "Job not found in local store");
-  if (!row.accessToken || !tokensEqual(token, row.accessToken)) return fail(403, "Invalid access token");
-  if (row.status !== "completed") return fail(409, "Only a completed job has a key to destroy");
+  if (row) {
+    if (row.status !== "completed") return fail(409, "Only a completed job has a key to destroy");
+  }
 
   const receiptHash = keyWipeReceiptHash(id, body);
   if (row.keyWipe) {

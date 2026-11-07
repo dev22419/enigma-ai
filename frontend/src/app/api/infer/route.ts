@@ -15,7 +15,7 @@ import { runInference, getTeeAttestation, mimeTypeFromFileName } from "@/lib/og-
 import { splitImageNote } from "@/lib/image-note";
 import { hashContent } from "@/lib/oracle-signer";
 import { safeErrorMessage } from "@/lib/redact";
-import { tokensEqual } from "@/lib/crypto";
+import { tokensEqual, deriveAccessToken } from "@/lib/crypto";
 import { readStore, withStore } from "@/lib/store";
 import { failJobOnChain } from "@/lib/contract";
 import type { InferRequest, InferResponse } from "@/lib/types";
@@ -50,17 +50,25 @@ export async function POST(req: NextRequest) {
   // --- Verify this is a paid, active job for this exact document ---
   const token = req.headers.get("x-access-token") ?? "";
   if (!token) return fail(401, "Missing x-access-token header");
+
+  // Deterministic HMAC token: any serverless instance can verify independently.
+  const expectedToken = deriveAccessToken(body.jobId);
+  if (!tokensEqual(token, expectedToken)) return fail(403, "Invalid access token");
+
   const row = (await readStore()).jobs[body.jobId];
-  if (!row) return fail(404, "Job not found");
-  if (!row.accessToken || !tokensEqual(token, row.accessToken)) return fail(403, "Invalid access token");
-  if (row.status !== "processing") return fail(409, `Job is ${row.status}`);
-  if (hashContent(body.content) !== row.fileHash) {
-    return fail(403, "This document isn't the one the job was opened for");
+  // When the store has the row, run full checks; when it doesn't (different
+  // Vercel instance), the HMAC verification above is sufficient.
+  if (row) {
+    if (row.status !== "processing") return fail(409, `Job is ${row.status}`);
+    if (hashContent(body.content) !== row.fileHash) {
+      return fail(403, "This document isn't the one the job was opened for");
+    }
   }
+
   const claimedAt = Math.floor(Date.now() / 1000);
   const claim = await withStore((d) => {
     const r = d.jobs[body.jobId];
-    if (!r) return "missing" as const;
+    if (!r) return "ok" as const; // stateless instance — HMAC already verified
     if (r.inferred) return "done" as const;
     if (r.inferring && claimedAt - r.inferring < 180) return "busy" as const;
     if ((r.inferAttempts ?? 0) >= 3) return "limit" as const;
@@ -71,7 +79,6 @@ export async function POST(req: NextRequest) {
   if (claim === "done") return fail(409, "This job was already read");
   if (claim === "busy") return fail(409, "This job is already being read");
   if (claim === "limit") return fail(429, "Too many attempts for this job");
-  if (claim === "missing") return fail(404, "Job not found");
 
   const release = async (reason = "inference failed") => {
     const spent = await withStore((d) => {

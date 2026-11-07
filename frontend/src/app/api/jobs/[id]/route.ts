@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobOnChain } from "@/lib/contract";
 import { fetchFromArkiv } from "@/lib/arkiv";
-import { tokensEqual } from "@/lib/crypto";
+import { tokensEqual, deriveAccessToken } from "@/lib/crypto";
 import { readStore } from "@/lib/store";
 import { safeErrorMessage } from "@/lib/redact";
 
@@ -30,9 +30,10 @@ export async function GET(
     let expiresAt = row?.expiresAt ?? null;
 
     const token = req.headers.get("x-access-token") ?? "";
-    const authorized = !!row?.accessToken && !!token && tokensEqual(token, row.accessToken);
+    const expectedToken = deriveAccessToken(String(jobId));
+    const authorized = !!token && tokensEqual(token, expectedToken);
 
-    if (job.status === "Completed" && authorized) {
+    if (job.status === "Completed" && authorized && !row?.keyWipe) {
       const arkiv = await fetchFromArkiv(String(jobId)).catch(() => null);
       arkivExists = !!arkiv?.exists;
       if (arkiv?.exists && arkiv.envelopeJson) {

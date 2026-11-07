@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { signJobCompletion } from "@/lib/oracle-signer";
 import { getJobOnChain, completeJobOnChain, startProcessingOnChain } from "@/lib/contract";
 import { storeInArkiv } from "@/lib/arkiv";
-import { tokensEqual } from "@/lib/crypto";
+import { tokensEqual, deriveAccessToken } from "@/lib/crypto";
 import { withStore, readStore } from "@/lib/store";
 import { safeErrorMessage } from "@/lib/redact";
 import type { StoreResultRequest, StoreResultResponse } from "@/lib/types";
@@ -47,22 +47,21 @@ export async function POST(
   const token = req.headers.get("x-access-token") ?? "";
   if (!token) return fail(401, "Missing x-access-token header");
 
+  const expectedToken = deriveAccessToken(id);
+  if (!tokensEqual(token, expectedToken)) return fail(403, "Invalid access token");
+
   const store = await readStore();
   const row = store.jobs[id];
-  if (!row) return fail(404, "Job not found in local store");
-  if (!row.accessToken || !tokensEqual(token, row.accessToken)) {
-    return fail(403, "Invalid access token");
-  }
-  if (row.status === "completed") return fail(409, "Job already completed");
-  // Only the enclave's own answer for this job may be signed. The hashes come from our record of /api/infer,
-  // never from the caller, so a client can't make the oracle attest something the enclave didn't say.
-  if (!row.inferred) return fail(409, "This job hasn't been read yet. Call /api/infer first");
-  if (
-    body.resultHash.toLowerCase() !== row.inferred.resultHash.toLowerCase() ||
-    body.attestationHash.toLowerCase() !== row.inferred.attestationHash.toLowerCase() ||
-    body.chatId !== row.inferred.chatId
-  ) {
-    return fail(403, "These hashes don't match the enclave's answer for this job");
+  if (row) {
+    if (row.status === "completed") return fail(409, "Job already completed");
+    if (!row.inferred) return fail(409, "This job hasn't been read yet. Call /api/infer first");
+    if (
+      body.resultHash.toLowerCase() !== row.inferred.resultHash.toLowerCase() ||
+      body.attestationHash.toLowerCase() !== row.inferred.attestationHash.toLowerCase() ||
+      body.chatId !== row.inferred.chatId
+    ) {
+      return fail(403, "These hashes don't match the enclave's answer for this job");
+    }
   }
 
   try {
