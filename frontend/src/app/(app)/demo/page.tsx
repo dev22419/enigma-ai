@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Fuse, Stamp } from "@/components/app/bits";
+import { Fuse } from "@/components/app/bits";
+import { BurnAway } from "@/components/app/burn-away";
 import { countdown, sections } from "@/components/app/jobs";
 
 /**
@@ -164,7 +165,7 @@ export default function DemoPage() {
                 </div>
               )}
               {(phase === "readable" || phase === "wiping") && (
-                <div className="grid gap-5 md:grid-cols-2">
+                <BurnAway expiresAt={expiresAt} className="grid gap-5 md:grid-cols-2">
                   {sections(DEMO_RESULT).map((s, i) => (
                     <div key={i} className={cn(i === 0 && "md:col-span-2")}>
                       {s.title && <h3 className="text-[13px] font-semibold text-volt-lit">{s.title}</h3>}
@@ -178,7 +179,7 @@ export default function DemoPage() {
                       </ul>
                     </div>
                   ))}
-                </div>
+                </BurnAway>
               )}
             </div>
 
@@ -191,8 +192,7 @@ export default function DemoPage() {
                 <KeyWipeAnimation active={phase === "wiping"} />
                 {phase === "destroyed" && (
                   <>
-                    <Stamp className="mt-6" sub="KEY WIPED" />
-                    <p className="mt-5 max-w-[28rem] text-center text-[14px] leading-relaxed text-frost-soft">
+                    <p className="mt-6 max-w-[28rem] text-center text-[14px] leading-relaxed text-frost-soft">
                       The encryption key was destroyed. The ciphertext on the right is now permanently unreadable — not even Enigma can recover it.
                     </p>
                   </>

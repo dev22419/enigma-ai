@@ -264,10 +264,6 @@ function Destroyed() {
         <p className="truncate">0e7c25b8f1a4c09d3b7251aa3c8e2b9f04d7e61a9d30e7c2</p>
         <p className="truncate">5d9b0c3f7a61b28d5e0f17a4c9b3e62d07f6c4118a2e4f70</p>
       </div>
-      <div className="stamp-in pointer-events-none absolute top-5 right-2 rounded-[6px] border-[3px] border-orchid px-3 py-1 text-orchid sm:right-6">
-        <span className="display narrow block text-[2rem] leading-none tracking-[0.02em]">DESTROYED</span>
-        <span className="block text-center font-mono text-[9.5px] tracking-[0.2em]">KEY GONE, DATA UNREADABLE</span>
-      </div>
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-dashed border-frost/20 pt-3 font-mono text-[11px]">
         <span className="text-frost-soft">Key wiped by your browser</span>
         <span className="text-volt-lit">receipt 0x7a3f…c210</span>

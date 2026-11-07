@@ -8,7 +8,8 @@ import { Seal } from "@/components/landing/certificate";
 import { Guilloche } from "@/components/landing/guilloche";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Check, Fuse, PhaseChip, Ref, Stamp, TaskChip } from "./bits";
+import { Check, Fuse, PhaseChip, Ref, TaskChip } from "./bits";
+import { BurnAway } from "./burn-away";
 import { countdown, getReceipt, sections, short, tryDecrypt, ttlLabel, useJobVM, useNow, when, type ApiReceipt, type JobVM } from "./jobs";
 
 export function JobView({ id }: { id: string }) {
@@ -151,7 +152,7 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
 
       <div className="relative mt-6 border-t border-night-line p-5 sm:p-7">
         {!gone && vm.result && (
-          <div className="grid gap-6 md:grid-cols-2">
+          <BurnAway expiresAt={vm.expiresAt} className="grid gap-6 md:grid-cols-2">
             {sections(vm.result).map((s, i, all) => (
               <div key={i} className={cn((i === 0 || (i === all.length - 1 && i % 2 === 1)) && "md:col-span-2")}>
                 {s.title && <h3 className="text-[13px] font-semibold text-volt-lit">{s.title}</h3>}
@@ -165,11 +166,11 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
                 </ul>
               </div>
             ))}
-          </div>
+          </BurnAway>
         )}
 
         {gone && (
-          <div>
+          <div className="rise">
             <p className="text-[13px] text-frost-soft">What&rsquo;s left of the answer</p>
             <p className="mt-2 font-mono text-[12px] leading-relaxed break-all text-frost/30">
               {vm.ciphertextPreview ?? "The Arkiv entity has expired, so even the ciphertext is gone."}
@@ -177,10 +178,11 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
             <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-frost-soft">
               Your browser wiped the only key that could open this. Nobody can read the answer again, including Enigma.
             </p>
-            <div className="mt-5 flex flex-wrap items-end justify-between gap-5">
-              {!vm.preview && <DecryptCheck id={vm.id} />}
-              <Stamp className="ml-auto" sub="KEY WIPED" />
-            </div>
+            {!vm.preview && (
+              <div className="mt-5">
+                <DecryptCheck id={vm.id} />
+              </div>
+            )}
           </div>
         )}
       </div>
