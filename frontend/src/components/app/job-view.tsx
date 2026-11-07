@@ -194,13 +194,7 @@ function Trail({ vm }: { vm: JobVM }) {
     v ? "done" : impliedByCompletion && completed ? "done" : vm.phase === "working" ? "active" : "todo";
   const rows: { what: string; where: string; value: string | null; state: "done" | "active" | "todo" | "skipped" }[] = [
     { what: "Payment locked", where: "Whitechain", value: vm.createTxHash, state: done(vm.createTxHash, true) },
-    {
-      what: vm.inputStorage ? "Encrypted copy stored" : "Encrypted copy stored (off on this server)",
-      where: "0G Storage",
-      value: vm.inputStorage?.rootHash ?? null,
-      state: vm.inputStorage ? "done" : vm.phase === "working" ? "todo" : "skipped",
-    },
-    { what: "Read inside the enclave", where: "0G Compute", value: vm.requestId, state: done(vm.requestId, true) },
+{ what: "Read inside the enclave", where: "0G Compute", value: vm.requestId, state: done(vm.requestId, true) },
     { what: "Attestation checked", where: "0G Compute", value: vm.attestationHash, state: done(vm.attestationHash, true) },
     { what: "Encrypted answer stored", where: "Arkiv", value: vm.arkivEntityKey, state: done(vm.arkivEntityKey, true) },
     { what: "Job completed", where: "Whitechain", value: vm.completeTxHash, state: done(vm.completeTxHash, true) },
