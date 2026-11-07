@@ -189,24 +189,26 @@ function AnswerCard({ vm, now }: { vm: JobVM; now: number }) {
 }
 
 function Trail({ vm }: { vm: JobVM }) {
-  const done = (v: unknown) => (v ? "done" : vm.phase === "working" ? "active" : "todo");
+  const completed = vm.phase !== "working" && vm.phase !== "failed" && vm.phase !== "missing" && vm.phase !== "refunded";
+  const done = (v: unknown, impliedByCompletion?: boolean) =>
+    v ? "done" : impliedByCompletion && completed ? "done" : vm.phase === "working" ? "active" : "todo";
   const rows: { what: string; where: string; value: string | null; state: "done" | "active" | "todo" | "skipped" }[] = [
-    { what: "Payment locked", where: "Whitechain", value: vm.createTxHash, state: done(vm.createTxHash) },
+    { what: "Payment locked", where: "Whitechain", value: vm.createTxHash, state: done(vm.createTxHash, true) },
     {
       what: vm.inputStorage ? "Encrypted copy stored" : "Encrypted copy stored (off on this server)",
       where: "0G Storage",
       value: vm.inputStorage?.rootHash ?? null,
       state: vm.inputStorage ? "done" : vm.phase === "working" ? "todo" : "skipped",
     },
-    { what: "Read inside the enclave", where: "0G Compute", value: vm.requestId, state: done(vm.requestId) },
-    { what: "Attestation checked", where: "0G Compute", value: vm.attestationHash, state: done(vm.attestationHash) },
-    { what: "Encrypted answer stored", where: "Arkiv", value: vm.arkivEntityKey, state: done(vm.arkivEntityKey) },
-    { what: "Job completed", where: "Whitechain", value: vm.completeTxHash, state: done(vm.completeTxHash) },
+    { what: "Read inside the enclave", where: "0G Compute", value: vm.requestId, state: done(vm.requestId, true) },
+    { what: "Attestation checked", where: "0G Compute", value: vm.attestationHash, state: done(vm.attestationHash, true) },
+    { what: "Encrypted answer stored", where: "Arkiv", value: vm.arkivEntityKey, state: done(vm.arkivEntityKey, true) },
+    { what: "Job completed", where: "Whitechain", value: vm.completeTxHash, state: done(vm.completeTxHash, true) },
     {
       what: "Key destroyed",
       where: "Enigma oracle",
       value: vm.destruction?.receiptHash ?? null,
-      state: vm.destruction ? "done" : vm.phase === "readable" ? "todo" : done(null),
+      state: vm.destruction ? "done" : vm.phase === "destroyed" ? "done" : vm.phase === "readable" ? "todo" : done(null),
     },
     { what: "Wipe recorded on-chain", where: "Whitechain", value: vm.anchorTxHash, state: vm.anchorTxHash ? "done" : "todo" },
   ];

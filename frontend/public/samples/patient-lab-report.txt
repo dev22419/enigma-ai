@@ -1,0 +1,152 @@
+CONFIDENTIAL — PATIENT MEDICAL RECORD
+St. Mary's General Hospital, Mumbai
+══════════════════════════════════════════════════════
+
+PATIENT INFORMATION
+  Name:             Ananya R. Mehta
+  Date of Birth:    14 March 1978 (Age: 48)
+  MRN:              SMG-2026-048291
+  Gender:           Female
+  Blood Group:      B+
+  Referring Doctor: Dr. Vikram Deshmukh (Internal Medicine)
+  Date of Visit:    02 November 2026
+
+══════════════════════════════════════════════════════
+
+CHIEF COMPLAINT
+  Patient presents with increased thirst (polydipsia), frequent urination
+  (polyuria) for approximately three weeks, and episodes of dizziness
+  upon standing. Reports occasional blurred vision in the mornings.
+
+MEDICAL HISTORY
+  - Type 2 Diabetes Mellitus, diagnosed 2019
+  - Essential Hypertension, diagnosed 2021
+  - Hyperlipidemia, diagnosed 2023
+  - Appendectomy, 2005
+
+ALLERGY INFORMATION
+  - Penicillin (skin rash, documented 2016)
+  - No known food allergies
+
+══════════════════════════════════════════════════════
+
+CURRENT MEDICATIONS
+  1. Metformin 1000 mg — twice daily (breakfast, dinner)
+  2. Lisinopril 10 mg — once daily (morning)
+  3. Atorvastatin 20 mg — once daily (bedtime)
+  4. Aspirin 75 mg — once daily (morning)
+
+══════════════════════════════════════════════════════
+
+VITALS (recorded 02 Nov 2026, 10:15 IST)
+  Blood Pressure:     148/92 mmHg (seated, left arm)
+  Heart Rate:         88 bpm (regular)
+  Respiratory Rate:   16 breaths/min
+  Temperature:        36.8°C (oral)
+  SpO2:               97% (room air)
+  Weight:             74.2 kg
+  Height:             162 cm
+  BMI:                28.3 kg/m² (overweight)
+
+  Orthostatic BP check:
+    Supine:   142/88 mmHg
+    Standing: 118/74 mmHg (drop of 24/14 mmHg after 2 min)
+    → Positive orthostatic hypotension
+
+══════════════════════════════════════════════════════
+
+LABORATORY RESULTS (drawn 01 Nov 2026)
+
+  GLYCEMIC PANEL
+  ┌─────────────────────┬──────────┬────────────────┬────────┐
+  │ Test                │ Result   │ Reference      │ Flag   │
+  ├─────────────────────┼──────────┼────────────────┼────────┤
+  │ Fasting Glucose     │ 198 mg/dL│ 70–100 mg/dL   │ HIGH   │
+  │ HbA1c               │ 8.4%     │ < 7.0%         │ HIGH   │
+  │ Previous HbA1c      │ 7.6%     │ (April 2026)   │        │
+  │ Fasting Insulin     │ 22.1 µU/mL│ 2.6–24.9 µU/mL│ Normal │
+  └─────────────────────┴──────────┴────────────────┴────────┘
+
+  RENAL PANEL
+  ┌─────────────────────┬──────────┬────────────────┬────────┐
+  │ Test                │ Result   │ Reference      │ Flag   │
+  ├─────────────────────┼──────────┼────────────────┼────────┤
+  │ Creatinine          │ 1.1 mg/dL│ 0.6–1.2 mg/dL  │ Normal │
+  │ eGFR                │ 68 mL/min│ > 90 mL/min    │ LOW    │
+  │ BUN                 │ 24 mg/dL │ 7–20 mg/dL     │ HIGH   │
+  │ Urine Albumin/Cr   │ 42 mg/g  │ < 30 mg/g      │ HIGH   │
+  └─────────────────────┴──────────┴────────────────┴────────┘
+
+  LIPID PANEL
+  ┌─────────────────────┬──────────┬────────────────┬────────┐
+  │ Test                │ Result   │ Reference      │ Flag   │
+  ├─────────────────────┼──────────┼────────────────┼────────┤
+  │ Total Cholesterol   │ 224 mg/dL│ < 200 mg/dL    │ HIGH   │
+  │ LDL Cholesterol     │ 142 mg/dL│ < 100 mg/dL    │ HIGH   │
+  │ HDL Cholesterol     │ 44 mg/dL │ > 50 mg/dL (F) │ LOW    │
+  │ Triglycerides       │ 190 mg/dL│ < 150 mg/dL    │ HIGH   │
+  └─────────────────────┴──────────┴────────────────┴────────┘
+
+  COMPLETE BLOOD COUNT
+  ┌─────────────────────┬──────────┬────────────────┬────────┐
+  │ Test                │ Result   │ Reference      │ Flag   │
+  ├─────────────────────┼──────────┼────────────────┼────────┤
+  │ Hemoglobin          │ 11.8 g/dL│ 12.0–16.0 g/dL │ LOW    │
+  │ WBC                 │ 7,200/µL │ 4,000–11,000/µL│ Normal │
+  │ Platelets           │ 242,000  │ 150,000–400,000│ Normal │
+  │ MCV                 │ 78 fL    │ 80–100 fL      │ LOW    │
+  └─────────────────────┴──────────┴────────────────┴────────┘
+
+  THYROID
+  ┌─────────────────────┬──────────┬────────────────┬────────┐
+  │ Test                │ Result   │ Reference      │ Flag   │
+  ├─────────────────────┼──────────┼────────────────┼────────┤
+  │ TSH                 │ 3.8 mU/L │ 0.4–4.0 mU/L   │ Normal │
+  │ Free T4             │ 1.1 ng/dL│ 0.8–1.8 ng/dL  │ Normal │
+  └─────────────────────┴──────────┴────────────────┴────────┘
+
+══════════════════════════════════════════════════════
+
+CLINICAL NOTES (Dr. Deshmukh)
+
+  1. Diabetes control has deteriorated — HbA1c risen from 7.6% to 8.4%
+     over six months. Patient reports dietary non-compliance during
+     festival season. Increased thirst and polyuria correlate with
+     hyperglycemia.
+
+  2. Orthostatic hypotension confirmed on standing test (24 mmHg systolic
+     drop). Likely multifactorial: autonomic neuropathy from diabetes
+     and/or lisinopril effect. Patient reports dizziness worsened after
+     lisinopril dose was maintained despite lower oral intake during
+     fasting days.
+
+  3. Early nephropathy signal: eGFR 68, urine albumin-to-creatinine
+     ratio 42 mg/g (microalbuminuria). Must be monitored closely given
+     concurrent hypertension and diabetes.
+
+  4. Lipid panel suboptimal despite atorvastatin 20 mg. LDL 142 exceeds
+     target of < 100 for diabetic patients. Consider dose increase.
+
+  5. Mild microcytic anemia — likely iron deficiency. Recommend serum
+     ferritin and iron studies.
+
+══════════════════════════════════════════════════════
+
+ITEMS REQUIRING URGENT ATTENTION
+
+  ▸ Dizziness on standing while on lisinopril — assess whether to
+    reduce dose or switch antihypertensive class
+  ▸ HbA1c rising across last two results — consider adding a second
+    oral agent (e.g., SGLT2 inhibitor) or initiating insulin discussion
+  ▸ Microalbuminuria with declining eGFR — renal-protective strategy
+    needed (SGLT2 inhibitor may address both glycemic and renal goals)
+  ▸ LDL significantly above target — increase atorvastatin to 40 mg
+    or add ezetimibe
+  ▸ Investigate microcytic anemia — order ferritin, serum iron, TIBC
+
+══════════════════════════════════════════════════════
+
+  This document contains protected health information.
+  Unauthorized disclosure is prohibited under applicable law.
+  Report generated: 02 November 2026 14:32 IST
+  St. Mary's General Hospital — Dept. of Internal Medicine
