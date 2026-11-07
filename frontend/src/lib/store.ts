@@ -69,23 +69,44 @@ interface Data {
 const FILE = () =>
   path.join(process.env.ENIGMA_DATA_DIR ?? path.join(process.cwd(), ".enigma-data"), "store.json");
 
-// One chain per process; every read-modify-write goes through it.
-const g = globalThis as unknown as { __enigmaLock?: Promise<unknown> };
+// In-memory fallback: on read-only filesystems (Vercel serverless) the file
+// write silently fails, so the in-memory cache is the only state that survives
+// between requests in the same warm instance. On writable filesystems (local
+// dev, tests) the file is always authoritative.
+const g = globalThis as unknown as {
+  __enigmaLock?: Promise<unknown>;
+  __enigmaMemStore?: Data;
+  __enigmaMemPath?: string;
+};
 
 async function load(): Promise<Data> {
+  const file = FILE();
+  if (g.__enigmaMemPath !== file) {
+    g.__enigmaMemStore = undefined;
+    g.__enigmaMemPath = file;
+  }
   try {
-    return JSON.parse(await fs.readFile(FILE(), "utf8")) as Data;
+    const data = JSON.parse(await fs.readFile(file, "utf8")) as Data;
+    g.__enigmaMemStore = data;
+    return data;
   } catch {
-    return { keys: {}, jobs: {}, receipts: {} };
+    return g.__enigmaMemStore ?? { keys: {}, jobs: {}, receipts: {} };
   }
 }
 
 async function save(data: Data): Promise<void> {
-  const file = FILE();
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
-  await fs.rename(tmp, file);
+  g.__enigmaMemStore = data;
+  g.__enigmaMemPath = FILE();
+  try {
+    const file = FILE();
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+    await fs.rename(tmp, file);
+  } catch {
+    // File write may fail on read-only filesystems (Vercel); the in-memory
+    // cache is still authoritative for this instance's lifetime.
+  }
 }
 
 export function withStore<T>(fn: (data: Data) => T | Promise<T>): Promise<T> {
