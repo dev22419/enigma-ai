@@ -204,7 +204,6 @@ function Trail({ vm }: { vm: JobVM }) {
       value: vm.destruction?.receiptHash ?? null,
       state: vm.destruction ? "done" : vm.phase === "destroyed" ? "done" : vm.phase === "readable" ? "todo" : done(null),
     },
-    { what: "Wipe recorded on-chain", where: "Whitechain", value: vm.anchorTxHash, state: vm.anchorTxHash ? "done" : "todo" },
   ];
   return (
     <section className="mt-8">
