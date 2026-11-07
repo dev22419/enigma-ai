@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MIN_TTL_SECONDS, MAX_TTL_SECONDS } from "@/lib/constants";
 import { createJobOnChain } from "@/lib/contract";
-import { randomToken } from "@/lib/crypto";
+import { deriveAccessToken } from "@/lib/crypto";
 import { withStore } from "@/lib/store";
 import { configProblems } from "@/lib/preflight";
 import { safeErrorMessage } from "@/lib/redact";
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const accessToken = randomToken();
+  const accessToken = deriveAccessToken(id);
   await withStore((d) => {
     d.jobs[id] = {
       jobId: id,

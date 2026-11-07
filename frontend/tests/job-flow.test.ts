@@ -558,7 +558,7 @@ describe("jobs are bound to infer and result", () => {
     await postJob(jobReq);
     expect((await inferReq(inferBody, "")).status).toBe(401);
     expect((await inferReq(inferBody, "wrong-token")).status).toBe(403);
-    expect((await inferReq({ ...inferBody, jobId: "99" })).status).toBe(404);
+    expect((await inferReq({ ...inferBody, jobId: "99" })).status).toBe(403);
     expect((await inferReq({ ...inferBody, jobId: "abc" })).status).toBe(400);
     expect(m.inference).not.toHaveBeenCalled();
   });

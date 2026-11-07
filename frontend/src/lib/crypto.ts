@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
@@ -88,6 +88,11 @@ export function parseEnvelope(raw: string): Envelope {
 
 export function randomToken(): string {
   return randomBytes(32).toString("hex");
+}
+
+export function deriveAccessToken(jobId: string): string {
+  const secret = process.env.ORACLE_PRIVATE_KEY ?? process.env.DEPLOYER_PRIVATE_KEY ?? "";
+  return createHmac("sha256", secret).update(`enigma-access:${jobId}`).digest("hex");
 }
 
 export function tokensEqual(a: string, b: string): boolean {
